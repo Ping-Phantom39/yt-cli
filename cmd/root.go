@@ -34,6 +34,13 @@ Examples:
 		// Setup volume override
 		m.SetVolumeLevel(startVolume)
 
+		// Auto-detect cookies.txt in the current directory if no --cookies flag was given
+		if cookiesFile == "" && cookiesFromBrowser == "" {
+			if _, err := os.Stat("cookies.txt"); err == nil {
+				cookiesFile = "cookies.txt"
+			}
+		}
+
 		// Setup cookies parameters
 		m.SetCookies(cookiesFile, cookiesFromBrowser)
 

@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -109,12 +111,15 @@ type Model struct {
 	cursor  int // index of highlighted row
 
 	// Downloading state
-	downloading     bool
-	downloadPercent float64
-	downloadVideoID string
-	downloadErr     error
-	progressChan    chan float64
-	downloadCancel  context.CancelFunc
+	downloading         bool
+	downloadPercent     float64
+	downloadVideoID     string
+	downloadErr         error
+	progressChan        chan float64
+	downloadCancel      context.CancelFunc
+	isPermanentDownload bool
+	downloadSuccessMsg  string
+	currentTempFile     string
 
 	// Player state
 	player            *player.Player
@@ -210,14 +215,14 @@ func (m *Model) searchCmd(ctx context.Context, query string) tea.Cmd {
 	}
 }
 
-func (m *Model) downloadCmd(ctx context.Context, id string, progressChan chan float64) tea.Cmd {
+func (m *Model) downloadCmd(ctx context.Context, id string, outputPath string, progressChan chan float64) tea.Cmd {
 	return func() tea.Msg {
 		// Close channel upon completion so reader finishes
 		defer func() {
 			recover() // Ignore panic if already closed
 		}()
 
-		filePath, err := downloader.Download(ctx, id, progressChan, m.CookiesFile, m.CookiesFromBrowser)
+		filePath, err := downloader.Download(ctx, id, outputPath, progressChan, m.CookiesFile, m.CookiesFromBrowser)
 		if err != nil {
 			return downloadErrorMsg(err)
 		}
@@ -248,25 +253,85 @@ func waitForTrackFinished(ch <-chan struct{}) tea.Cmd {
 	}
 }
 
+// cleanupTempFiles deletes any active temporary playback files
+func (m *Model) cleanupTempFiles() {
+	if m.currentTempFile != "" {
+		_ = os.Remove(m.currentTempFile)
+		m.currentTempFile = ""
+	}
+}
+
 // Helper to launch download and play sequence
 func (m *Model) startDownloadAndPlay(video downloader.Video) tea.Cmd {
 	// Cancel any active download
 	if m.downloadCancel != nil {
 		m.downloadCancel()
 	}
+	m.cleanupTempFiles()
 
 	m.downloading = true
+	m.isPermanentDownload = false
 	m.downloadPercent = 0.0
 	m.downloadVideoID = video.ID
 	m.downloadErr = nil
+	m.downloadSuccessMsg = ""
 	m.progressChan = make(chan float64, 50)
 	m.playingVideo = video
 
 	var ctx context.Context
 	ctx, m.downloadCancel = context.WithCancel(context.Background())
 
+	// Check if a permanent download file already exists in ./downloads
+	permPath := filepath.Join(".", "downloads", fmt.Sprintf("%s.mp3", video.ID))
+	if info, err := os.Stat(permPath); err == nil && !info.IsDir() && info.Size() > 0 {
+		m.downloading = false
+		m.downloadPercent = 100.0
+		err := m.player.Play(permPath)
+		if err != nil {
+			m.downloadErr = fmt.Errorf("playback failed: %v", err)
+		}
+		return nil
+	}
+
+	// Create a unique temporary file path for streaming playback
+	tempFile, err := os.CreateTemp("", "ytmusic-*.mp3")
+	if err != nil {
+		m.downloading = false
+		m.downloadErr = fmt.Errorf("failed to create temp file: %v", err)
+		return nil
+	}
+	tempPath := tempFile.Name()
+	tempFile.Close()
+	m.currentTempFile = tempPath
+
 	return tea.Batch(
-		m.downloadCmd(ctx, video.ID, m.progressChan),
+		m.downloadCmd(ctx, video.ID, tempPath, m.progressChan),
+		waitForProgress(m.progressChan),
+	)
+}
+
+// Helper to launch permanent download sequence to the downloads/ folder
+func (m *Model) startPermanentDownload(video downloader.Video) tea.Cmd {
+	if m.downloadCancel != nil {
+		m.downloadCancel()
+	}
+
+	m.downloading = true
+	m.isPermanentDownload = true
+	m.downloadPercent = 0.0
+	m.downloadVideoID = video.ID
+	m.downloadErr = nil
+	m.downloadSuccessMsg = ""
+	m.progressChan = make(chan float64, 50)
+	m.playingVideo = video
+
+	var ctx context.Context
+	ctx, m.downloadCancel = context.WithCancel(context.Background())
+
+	outputPath := filepath.Join(".", "downloads", fmt.Sprintf("%s.mp3", video.ID))
+
+	return tea.Batch(
+		m.downloadCmd(ctx, video.ID, outputPath, m.progressChan),
 		waitForProgress(m.progressChan),
 	)
 }
@@ -290,6 +355,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case trackFinishedMsg:
 		// Song ended. Listen for next track finish first
 		nextTrackCmd := waitForTrackFinished(m.trackFinishedChan)
+
+		// Clean up the temp file of the finished song
+		m.cleanupTempFiles()
 
 		// Implement auto-play: Find if there's a next video in the list
 		if len(m.results) > 0 {
@@ -336,6 +404,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case downloadFinishedMsg:
 		m.downloading = false
 		m.downloadPercent = 100.0
+		if m.isPermanentDownload {
+			m.downloadSuccessMsg = fmt.Sprintf("Saved permanently to downloads/%s.mp3", m.playingVideo.ID)
+			return m, nil
+		}
 		// Play downloaded path
 		err := m.player.Play(string(msg))
 		if err != nil {
@@ -349,7 +421,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.downloading = false
-		m.downloadErr = msg
+		errMsg := msg.Error()
+		if strings.Contains(errMsg, "confirm you’re not a bot") || strings.Contains(errMsg, "confirm you're not a bot") || strings.Contains(errMsg, "Sign in to confirm") {
+			m.downloadErr = fmt.Errorf("YouTube bot block! Bypassed by passing cookies (e.g. --cookies cookies.txt or --cookies-from-browser chrome)")
+		} else {
+			m.downloadErr = msg
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -361,6 +438,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.downloadCancel != nil {
 					m.downloadCancel()
 				}
+				m.cleanupTempFiles()
 				return m, tea.Quit
 
 			case "up", "k":
@@ -384,6 +462,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.results) > 0 && m.cursor < len(m.results) {
 					playCmd := m.startDownloadAndPlay(m.results[m.cursor])
 					return m, playCmd
+				}
+
+			case "d":
+				if len(m.results) > 0 && m.cursor < len(m.results) {
+					downloadCmd := m.startPermanentDownload(m.results[m.cursor])
+					return m, downloadCmd
 				}
 
 			case "left", "h":
@@ -411,6 +495,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "s":
 				// Stop playback
 				m.player.Stop()
+				m.cleanupTempFiles()
 			}
 		} else {
 			// Search Input is focused
@@ -627,8 +712,12 @@ func (m *Model) View() string {
 	} else {
 		badge := lipgloss.NewStyle().Background(grayColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("■ STOPPED")
 		titleStyled := lipgloss.NewStyle().Foreground(grayColor).Render("No active playback")
+		if m.downloadSuccessMsg != "" {
+			badge = lipgloss.NewStyle().Background(greenColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("💾 SAVED")
+			titleStyled = lipgloss.NewStyle().Foreground(greenColor).Bold(true).Render(m.downloadSuccessMsg)
+		}
 		playerContent.WriteString(fmt.Sprintf("%s  %s\n\n", badge, titleStyled))
-		playerContent.WriteString(lipgloss.NewStyle().Foreground(grayColor).Render("Select a song from the results and press Enter to stream."))
+		playerContent.WriteString(lipgloss.NewStyle().Foreground(grayColor).Render("Select a song and press Enter to play, or 'd' to download."))
 	}
 
 	s.WriteString(playerBoxStyle.Width(m.width - 4).Render(playerContent.String()))
@@ -639,9 +728,10 @@ func (m *Model) View() string {
 	descStyle := lipgloss.NewStyle().Foreground(grayColor)
 	
 	helpStr := fmt.Sprintf(
-		" %s %s   %s %s   %s %s   %s %s   %s %s   %s %s   %s %s",
+		" %s %s   %s %s   %s %s   %s %s   %s %s   %s %s   %s %s   %s %s",
 		keyStyle.Render("[/]"), descStyle.Render("Search"),
 		keyStyle.Render("[Enter]"), descStyle.Render("Play"),
+		keyStyle.Render("[d]"), descStyle.Render("Download"),
 		keyStyle.Render("[Space]"), descStyle.Render("Pause/Resume"),
 		keyStyle.Render("[s]"), descStyle.Render("Stop"),
 		keyStyle.Render("[←/→]"), descStyle.Render("Seek ±5s"),

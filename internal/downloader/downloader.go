@@ -79,6 +79,8 @@ func Search(ctx context.Context, query string, limit int, cookiesFile, cookiesFr
 		"--dump-json",
 		"--flat-playlist",
 		"--no-warnings",
+		"--js-runtimes", "node",
+		"--remote-components", "ejs:github",
 	}
 
 	if cookiesFile != "" {
@@ -145,29 +147,41 @@ func Search(ctx context.Context, query string, limit int, cookiesFile, cookiesFr
 // Download downloads a YouTube video as an MP3 audio file.
 // progressChan receives progress percentage (0.0 to 100.0).
 // Returns the absolute path to the downloaded MP3 file.
-func Download(ctx context.Context, id string, progressChan chan<- float64, cookiesFile, cookiesFromBrowser string) (string, error) {
+func Download(ctx context.Context, id string, outputPath string, progressChan chan<- float64, cookiesFile, cookiesFromBrowser string) (string, error) {
 	ytDlpPath, err := ResolvePath()
 	if err != nil {
 		return "", err
 	}
 
-	// Ensure downloads directory exists
-	downloadsDir := filepath.Join(".", "downloads")
-	if err := os.MkdirAll(downloadsDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create downloads directory: %w", err)
+	// Ensure destination directory exists
+	destDir := filepath.Dir(outputPath)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
-	outputPath := filepath.Join(downloadsDir, fmt.Sprintf("%s.mp3", id))
-
-	// If the file already exists, we can return it directly.
-	if info, err := os.Stat(outputPath); err == nil && !info.IsDir() {
+	// If the file already exists and is not empty, we can return it directly.
+	if info, err := os.Stat(outputPath); err == nil && !info.IsDir() && info.Size() > 0 {
 		if progressChan != nil {
 			progressChan <- 100.0
 		}
-		return filepath.Abs(outputPath)
+		absPath, err := filepath.Abs(outputPath)
+		if err != nil {
+			return outputPath, nil
+		}
+		return absPath, nil
 	}
 
 	videoURL := "https://www.youtube.com/watch?v=" + id
+
+	// Generate output template based on destination path
+	// Replace final extension with %(ext)s so yt-dlp knows where to download intermediate files
+	ext := filepath.Ext(outputPath)
+	var outputTemplate string
+	if ext != "" {
+		outputTemplate = outputPath[:len(outputPath)-len(ext)] + ".%(ext)s"
+	} else {
+		outputTemplate = outputPath + ".%(ext)s"
+	}
 
 	// Command arguments for extracting audio
 	args := []string{
@@ -176,7 +190,9 @@ func Download(ctx context.Context, id string, progressChan chan<- float64, cooki
 		"--audio-quality", "0",
 		"--no-keep-video",
 		"--newline",
-		"-o", filepath.Join(downloadsDir, "%(id)s.%(ext)s"),
+		"--js-runtimes", "node",
+		"--remote-components", "ejs:github",
+		"-o", outputTemplate,
 	}
 
 	if cookiesFile != "" {
@@ -236,5 +252,9 @@ func Download(ctx context.Context, id string, progressChan chan<- float64, cooki
 		progressChan <- 100.0
 	}
 
-	return filepath.Abs(outputPath)
+	absPath, err := filepath.Abs(outputPath)
+	if err != nil {
+		return outputPath, nil
+	}
+	return absPath, nil
 }
