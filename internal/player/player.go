@@ -167,7 +167,7 @@ func (p *Player) TogglePause() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.ctrl == nil {
+	if p.ctrl == nil || !p.speakerInitialized {
 		return
 	}
 
@@ -194,7 +194,9 @@ func (p *Player) Stop() {
 // stopUnderlying stops playback. Caller MUST hold the lock.
 func (p *Player) stopUnderlying() {
 	p.state = StateStopped
-	speaker.Clear()
+	if p.speakerInitialized {
+		speaker.Clear()
+	}
 
 	if p.streamer != nil {
 		if closer, ok := p.streamer.(io.Closer); ok {
@@ -217,7 +219,7 @@ func (p *Player) SetVolume(level float64) {
 	}
 	p.volumeLevel = level
 
-	if p.volume != nil {
+	if p.volume != nil && p.speakerInitialized {
 		speaker.Lock()
 		p.volume.Volume = p.volumeLogScale(p.volumeLevel)
 		speaker.Unlock()
@@ -229,8 +231,8 @@ func (p *Player) Seek(seconds float64) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.streamer == nil {
-		return fmt.Errorf("no track loaded")
+	if p.streamer == nil || !p.speakerInitialized {
+		return fmt.Errorf("no track loaded or audio device not initialized")
 	}
 
 	sampleIndex := int(seconds * float64(p.format.SampleRate))
@@ -256,7 +258,7 @@ func (p *Player) Status() (current float64, total float64, volume float64, state
 	volume = p.volumeLevel
 	state = p.state
 
-	if p.streamer == nil {
+	if p.streamer == nil || !p.speakerInitialized {
 		return 0, 0, volume, state
 	}
 
