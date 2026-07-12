@@ -47,6 +47,7 @@ var (
 	// List styling
 	selectedRowStyle = lipgloss.NewStyle().
 				Foreground(pinkColor).
+				Background(lipgloss.Color("#1a0917")).
 				Bold(true)
 
 	normalRowStyle = lipgloss.NewStyle().
@@ -79,6 +80,21 @@ var (
 	statusStoppedStyle = lipgloss.NewStyle().
 			Foreground(grayColor).
 			Bold(true)
+
+	searchBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(cyanColor).
+			Padding(0, 1)
+
+	resultsBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(purpleColor).
+			Padding(0, 1)
+
+	playerBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(pinkColor).
+			Padding(1, 2)
 )
 
 // Model represents the state of the TUI application
@@ -263,6 +279,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.searchInput.Width = m.width - 16
 		return m, nil
 
 	case tickMsg:
@@ -428,10 +445,8 @@ func formatTime(seconds float64) string {
 	m := s / 60
 	sec := s % 60
 	return fmt.Sprintf("%02d:%02d", m, sec)
-}
-
-// renderCustomProgressBar builds a cyberpunk progress bar using ascii characters
-func renderCustomProgressBar(width int, percent float64) string {
+}// renderCustomProgressBar builds a cyberpunk progress bar using ascii characters
+func renderCustomProgressBar(width int, percent float64, color lipgloss.Color) string {
 	if width <= 0 {
 		return ""
 	}
@@ -449,7 +464,7 @@ func renderCustomProgressBar(width int, percent float64) string {
 	emptyStr := strings.Repeat("░", emptyWidth)
 
 	// Style sections
-	filledStyled := lipgloss.NewStyle().Foreground(pinkColor).Render(filledStr)
+	filledStyled := lipgloss.NewStyle().Foreground(color).Render(filledStr)
 	emptyStyled := lipgloss.NewStyle().Foreground(lipgloss.Color("#252525")).Render(emptyStr)
 
 	return filledStyled + emptyStyled
@@ -468,8 +483,8 @@ func truncate(s string, length int) string {
 
 // View renders the TUI layout on every update cycle
 func (m *Model) View() string {
-	if m.width < 10 || m.height < 5 {
-		return "Initializing Cyberpunk Terminal YT-Music..."
+	if m.width < 40 || m.height < 15 {
+		return fmt.Sprintf("Terminal too small (%dx%d).\nPlease enlarge to at least 40x15.", m.width, m.height)
 	}
 
 	var s strings.Builder
@@ -480,129 +495,160 @@ func (m *Model) View() string {
  ▀▄▀ █  █ █  █   █   █  █ █▀▀▄ █▀▀▀    █ ▀ █ █  █ ▀▀▀█ █▄▄▄█ █▀▀▀
   █  ▀▀▀▀  ▀▀▀   ▀   ▀▀▀▀ █▄▄█ █▄▄▄    █   █  ▀▀▀ █▄▄▄ █    ▀ █▄▄▄
 `
-	s.WriteString(lipgloss.NewStyle().Foreground(cyanColor).Render(banner))
+	s.WriteString(lipgloss.NewStyle().Foreground(cyanColor).Align(lipgloss.Center).Width(m.width).Render(banner))
 	s.WriteString("\n")
 
 	// Search bar view
-	s.WriteString(m.searchInput.View())
-	s.WriteString("\n\n")
+	searchContent := m.searchInput.View()
+	s.WriteString(searchBoxStyle.Width(m.width - 4).Render(searchContent))
+	s.WriteString("\n")
 
 	// Main body height limits
-	mainContentHeight := m.height - 18 // Leave room for banner, search, status, and help
-	if mainContentHeight < 5 {
-		mainContentHeight = 5 // minimum height fallback
+	mainContentHeight := m.height - 18
+	if mainContentHeight < 3 {
+		mainContentHeight = 3
 	}
 
-	// Main List area
+	innerWidth := m.width - 8
+	maxChanLen := 20
+	maxTitleLen := innerWidth - maxChanLen - 12
+	if maxTitleLen < 20 {
+		maxTitleLen = 20
+	}
+
+	// Main List area (within results box)
+	var resultsContent string
 	if m.searching {
-		s.WriteString(infoStyle.Render(" ⚡ Scraping YouTube metadata asynchronously... Please wait."))
-		s.WriteString("\n")
+		resultsContent = "\n" + lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(infoStyle.Render("⚡ Scraping YouTube metadata asynchronously...\n\nPlease wait a moment.")) + "\n"
 	} else if m.searchErr != nil {
-		s.WriteString(errorStyle.Render(fmt.Sprintf(" ⚠️ Error searching: %v", m.searchErr)))
-		s.WriteString("\n")
+		resultsContent = "\n" + lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(errorStyle.Render(fmt.Sprintf("⚠️ Search Failed:\n\n%v", m.searchErr))) + "\n"
 	} else if len(m.results) == 0 {
-		s.WriteString(infoStyle.Render(" No search results. Type / to search for songs."))
-		s.WriteString("\n")
+		resultsContent = "\n" + lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(infoStyle.Render("No search results found.\n\nPress [/] to focus the search bar and type a query.")) + "\n"
 	} else {
-		// Display search results
-		s.WriteString(lipgloss.NewStyle().Foreground(purpleColor).Bold(true).Render(" 🔍 Search Results:\n"))
-		
-		// List display
-		maxTitleLen := m.width - 40
-		if maxTitleLen < 20 {
-			maxTitleLen = 20
-		}
-		maxChanLen := 20
+		var sb strings.Builder
+		headerStr := fmt.Sprintf("  %-*s  %-*s  %6s", maxTitleLen, "TITLE", maxChanLen, "UPLOADER", "DURATION")
+		headerStyled := lipgloss.NewStyle().Foreground(purpleColor).Bold(true).Underline(true).Render(headerStr)
+		sb.WriteString(headerStyled + "\n\n")
 
 		for i, video := range m.results {
-			// Limit listings to fit viewport
 			if i >= mainContentHeight {
 				break
 			}
-
-			marker := "  "
-			rowStyle := normalRowStyle
-			if i == m.cursor {
-				marker = "▶ "
-				rowStyle = selectedRowStyle
-			}
-
 			title := truncate(video.Title, maxTitleLen)
 			uploader := truncate(video.Uploader, maxChanLen)
 			duration := video.FormatDuration()
 
-			// Print columns
-			rowStr := fmt.Sprintf("%s%-*s  %-*s  %6s", 
-				marker, 
-				maxTitleLen, title, 
-				maxChanLen, uploader, 
-				duration,
-			)
-			s.WriteString(rowStyle.Render(rowStr))
-			s.WriteString("\n")
+			var rowStr string
+			if i == m.cursor {
+				rawRow := fmt.Sprintf("▶ %-*s  %-*s  %6s", maxTitleLen, title, maxChanLen, uploader, duration)
+				// Pad rawRow to fill the innerWidth minus padding
+				rawRow = fmt.Sprintf("%-*s", innerWidth-2, rawRow)
+				rowStr = selectedRowStyle.Render(rawRow)
+			} else {
+				titleStyled := normalRowStyle.Render(title)
+				uploaderStyled := metaStyle.Render(uploader)
+				durationStyled := lipgloss.NewStyle().Foreground(yellowColor).Render(duration)
+				rowStr = fmt.Sprintf("  %-*s  %-*s  %6s", 
+					maxTitleLen, titleStyled, 
+					maxChanLen, uploaderStyled, 
+					durationStyled,
+				)
+			}
+			sb.WriteString(rowStr + "\n")
 		}
+		resultsContent = sb.String()
 	}
 
+	s.WriteString(resultsBoxStyle.Width(m.width - 4).Render(resultsContent))
 	s.WriteString("\n")
 
-	// Downloading Progress Section
+	// Player Panel Section
+	var playerContent strings.Builder
+	
 	if m.downloading {
-		s.WriteString(lipgloss.NewStyle().Foreground(pinkColor).Bold(true).Render(" 📥 Downloading Audio stream:\n"))
-		progBarWidth := m.width - 20
+		badge := lipgloss.NewStyle().Background(pinkColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("📥 DOWNLOADING")
+		titleStyled := lipgloss.NewStyle().Foreground(pinkColor).Bold(true).Render(truncate(m.playingVideo.Title, m.width-25))
+		playerContent.WriteString(fmt.Sprintf("%s  %s\n\n", badge, titleStyled))
+
+		progBarWidth := m.width - 32
 		if progBarWidth < 10 {
 			progBarWidth = 10
 		}
-		s.WriteString(fmt.Sprintf(" [%s] %5.1f%%\n", 
-			renderCustomProgressBar(progBarWidth, m.downloadPercent/100.0), 
+		
+		timelineStr := fmt.Sprintf("Progress: [%s] %5.1f%%  │  Transcoding MP3...",
+			renderCustomProgressBar(progBarWidth, m.downloadPercent/100.0, pinkColor),
 			m.downloadPercent,
-		))
+		)
+		playerContent.WriteString(timelineStr)
 	} else if m.downloadErr != nil {
-		s.WriteString(errorStyle.Render(fmt.Sprintf(" ⚠️ Download Error: %v\n", m.downloadErr)))
+		badge := lipgloss.NewStyle().Background(lipgloss.Color("#ff007f")).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("⚠️ ERROR")
+		errStyled := errorStyle.Render(fmt.Sprintf("Download failed: %v", m.downloadErr))
+		playerContent.WriteString(fmt.Sprintf("%s  %s\n\n", badge, errStyled))
+		playerContent.WriteString(lipgloss.NewStyle().Foreground(grayColor).Render("Press Enter on a search result to try again."))
+	} else if m.playState != player.StateStopped {
+		badgeText := "▶ PLAYING"
+		var badgeBg lipgloss.Color = greenColor
+		if m.playState == player.StatePaused {
+			badgeText = "⏸ PAUSED"
+			badgeBg = yellowColor
+		}
+		
+		badge := lipgloss.NewStyle().Background(badgeBg).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render(badgeText)
+		titleStyled := lipgloss.NewStyle().Foreground(cyanColor).Bold(true).Render(truncate(m.playingVideo.Title, m.width-25))
+		playerContent.WriteString(fmt.Sprintf("%s  %s\n\n", badge, titleStyled))
+
+		timelineWidth := m.width - 32
+		if timelineWidth < 10 {
+			timelineWidth = 10
+		}
+		var timelinePercent float64
+		if m.totalDuration > 0 {
+			timelinePercent = m.currentPos / m.totalDuration
+		}
+
+		volPercent := int(m.volumeLevel * 100)
+		volIcon := "🔊"
+		if volPercent == 0 {
+			volIcon = "🔇"
+		} else if volPercent < 40 {
+			volIcon = "🔈"
+		} else if volPercent < 85 {
+			volIcon = "🔉"
+		}
+
+		timelineStr := fmt.Sprintf("%5s [%s] %-5s  │  %s %3d%%",
+			formatTime(m.currentPos),
+			renderCustomProgressBar(timelineWidth, timelinePercent, cyanColor),
+			formatTime(m.totalDuration),
+			volIcon,
+			volPercent,
+		)
+		playerContent.WriteString(timelineStr)
 	} else {
-		s.WriteString("\n") // Keep layout spacing uniform
+		badge := lipgloss.NewStyle().Background(grayColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("■ STOPPED")
+		titleStyled := lipgloss.NewStyle().Foreground(grayColor).Render("No active playback")
+		playerContent.WriteString(fmt.Sprintf("%s  %s\n\n", badge, titleStyled))
+		playerContent.WriteString(lipgloss.NewStyle().Foreground(grayColor).Render("Select a song from the results and press Enter to stream."))
 	}
 
-	// Player Panel Section
-	s.WriteString(lipgloss.NewStyle().Foreground(purpleColor).Render("─" + strings.Repeat("─", m.width-2) + "─"))
-	s.WriteString("\n")
-
-	// Playing status
-	statusLabel := statusStoppedStyle.Render("■ STOPPED")
-	playingTitle := "No track loaded"
-
-	if m.playState == player.StatePlaying {
-		statusLabel = greenStatusStyle.Render("▶ PLAYING")
-		playingTitle = m.playingVideo.Title
-	} else if m.playState == player.StatePaused {
-		statusLabel = yellowStatusStyle.Render("⏸ PAUSED")
-		playingTitle = m.playingVideo.Title
-	}
-
-	s.WriteString(fmt.Sprintf(" %s | %s\n", statusLabel, lipgloss.NewStyle().Foreground(cyanColor).Bold(true).Render(truncate(playingTitle, m.width-20))))
-
-	// Player Timeline Bar
-	timelineWidth := m.width - 25
-	if timelineWidth < 10 {
-		timelineWidth = 10
-	}
-	var timelinePercent float64
-	if m.totalDuration > 0 {
-		timelinePercent = m.currentPos / m.totalDuration
-	}
-
-	volPercent := int(m.volumeLevel * 100)
-	s.WriteString(fmt.Sprintf(" %5s [%s] %-5s  | Vol: %3d%% \n",
-		formatTime(m.currentPos),
-		renderCustomProgressBar(timelineWidth, timelinePercent),
-		formatTime(m.totalDuration),
-		volPercent,
-	))
-
-	s.WriteString(lipgloss.NewStyle().Foreground(purpleColor).Render("─" + strings.Repeat("─", m.width-2) + "─"))
+	s.WriteString(playerBoxStyle.Width(m.width - 4).Render(playerContent.String()))
 	s.WriteString("\n")
 
 	// Help Guide / Footer
-	s.WriteString(metaStyle.Render(" [/] Search  [Enter] Play  [Space] Play/Pause  [s] Stop  [Left/Right] Seek ±5s  [[] / []] Vol -/+  [q] Quit"))
+	keyStyle := lipgloss.NewStyle().Foreground(cyanColor).Bold(true)
+	descStyle := lipgloss.NewStyle().Foreground(grayColor)
+	
+	helpStr := fmt.Sprintf(
+		" %s %s   %s %s   %s %s   %s %s   %s %s   %s %s   %s %s",
+		keyStyle.Render("[/]"), descStyle.Render("Search"),
+		keyStyle.Render("[Enter]"), descStyle.Render("Play"),
+		keyStyle.Render("[Space]"), descStyle.Render("Pause/Resume"),
+		keyStyle.Render("[s]"), descStyle.Render("Stop"),
+		keyStyle.Render("[←/→]"), descStyle.Render("Seek ±5s"),
+		keyStyle.Render("[[/]]"), descStyle.Render("Vol -/+"),
+		keyStyle.Render("[q]"), descStyle.Render("Quit"),
+	)
+	s.WriteString(lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(helpStr))
 
 	return s.String()
 }
