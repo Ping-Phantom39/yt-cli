@@ -210,7 +210,10 @@ func Download(ctx context.Context, id string, outputPath string, progressChan ch
 	if err != nil {
 		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	cmd.Stderr = os.Stderr
+
+	// Capture stderr so we can include the actual error message
+	var stderrBuf strings.Builder
+	cmd.Stderr = &stderrBuf
 
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("failed to start yt-dlp: %w", err)
@@ -240,6 +243,16 @@ func Download(ctx context.Context, id string, outputPath string, progressChan ch
 	}
 
 	if err := cmd.Wait(); err != nil {
+		errDetail := strings.TrimSpace(stderrBuf.String())
+		if errDetail != "" {
+			// Extract the last ERROR line if present for a cleaner message
+			for _, line := range strings.Split(errDetail, "\n") {
+				if strings.Contains(line, "ERROR") {
+					errDetail = strings.TrimSpace(line)
+				}
+			}
+			return "", fmt.Errorf("%s", errDetail)
+		}
 		return "", fmt.Errorf("failed to download: %w", err)
 	}
 

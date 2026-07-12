@@ -109,6 +109,7 @@ type Model struct {
 	// Results list
 	results []downloader.Video
 	cursor  int // index of highlighted row
+	startIdx int // index of first visible row in viewport
 
 	// Downloading state
 	downloading         bool
@@ -253,16 +254,21 @@ func waitForTrackFinished(ch <-chan struct{}) tea.Cmd {
 	}
 }
 
-// cleanupTempFiles deletes any active temporary playback files
+// cleanupTempFiles deletes any active temporary playback files and their temp directory
 func (m *Model) cleanupTempFiles() {
 	if m.currentTempFile != "" {
 		_ = os.Remove(m.currentTempFile)
+		// Also remove the parent temp directory we created
+		_ = os.Remove(filepath.Dir(m.currentTempFile))
 		m.currentTempFile = ""
 	}
 }
 
 // Helper to launch download and play sequence
 func (m *Model) startDownloadAndPlay(video downloader.Video) tea.Cmd {
+	// Stop any active playback to release the file handle
+	m.player.Stop()
+
 	// Cancel any active download
 	if m.downloadCancel != nil {
 		m.downloadCancel()
@@ -293,15 +299,16 @@ func (m *Model) startDownloadAndPlay(video downloader.Video) tea.Cmd {
 		return nil
 	}
 
-	// Create a unique temporary file path for streaming playback
-	tempFile, err := os.CreateTemp("", "ytmusic-*.mp3")
+	// Generate a unique temporary file path for streaming playback.
+	// We must NOT pre-create the .mp3 file, because yt-dlp would see it
+	// and skip downloading (thinking it already exists).
+	tempDir, err := os.MkdirTemp("", "ytmusic-")
 	if err != nil {
 		m.downloading = false
-		m.downloadErr = fmt.Errorf("failed to create temp file: %v", err)
+		m.downloadErr = fmt.Errorf("failed to create temp dir: %v", err)
 		return nil
 	}
-	tempPath := tempFile.Name()
-	tempFile.Close()
+	tempPath := filepath.Join(tempDir, fmt.Sprintf("%s.mp3", video.ID))
 	m.currentTempFile = tempPath
 
 	return tea.Batch(
@@ -356,6 +363,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Song ended. Listen for next track finish first
 		nextTrackCmd := waitForTrackFinished(m.trackFinishedChan)
 
+		// Stop the player to release the file handle
+		m.player.Stop()
+
 		// Clean up the temp file of the finished song
 		m.cleanupTempFiles()
 
@@ -390,6 +400,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.results = msg.videos
 			m.searchErr = nil
 			m.cursor = 0
+			m.startIdx = 0
 		}
 		return m, nil
 
@@ -451,8 +462,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursor++
 				}
 
-			case "space":
+			case " ", "space":
 				m.player.TogglePause()
+				// Update TUI state immediately for instantaneous feedback
+				_, _, _, m.playState = m.player.Status()
 
 			case "/":
 				m.searchInput.Focus()
@@ -505,6 +518,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if strings.TrimSpace(query) != "" {
 					m.searching = true
 					m.searchErr = nil
+					m.cursor = 0
+					m.startIdx = 0
 					m.searchInput.Blur()
 					return m, m.searchCmd(context.Background(), query)
 				}
@@ -615,10 +630,26 @@ func (m *Model) View() string {
 		headerStyled := lipgloss.NewStyle().Foreground(purpleColor).Bold(true).Underline(true).Render(headerStr)
 		sb.WriteString(headerStyled + "\n\n")
 
-		for i, video := range m.results {
-			if i >= mainContentHeight {
-				break
-			}
+		pageSize := mainContentHeight
+		if m.cursor < m.startIdx {
+			m.startIdx = m.cursor
+		} else if m.cursor >= m.startIdx+pageSize {
+			m.startIdx = m.cursor - pageSize + 1
+		}
+
+		// Safety bounds checking
+		if m.startIdx < 0 {
+			m.startIdx = 0
+		}
+		if m.startIdx > len(m.results)-pageSize {
+			m.startIdx = len(m.results) - pageSize
+		}
+		if m.startIdx < 0 {
+			m.startIdx = 0
+		}
+
+		for i := m.startIdx; i < m.startIdx+pageSize && i < len(m.results); i++ {
+			video := m.results[i]
 			title := truncate(video.Title, maxTitleLen)
 			uploader := truncate(video.Uploader, maxChanLen)
 			duration := video.FormatDuration()

@@ -5,8 +5,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"ytmusic/internal/deps"
 	"ytmusic/internal/ui"
 )
 
@@ -15,6 +17,7 @@ var (
 	searchLimit        int
 	cookiesFile        string
 	cookiesFromBrowser string
+	checkDepsFlag      bool
 )
 
 var rootCmd = &cobra.Command{
@@ -27,8 +30,15 @@ Examples:
   ytmusic                       # Start the player in search mode
   ytmusic "lofi hip hop beats"  # Start the player and search immediately
   ytmusic -v 0.5 "synthwave"    # Start with 50% volume and search synthwave
-  ytmusic --cookies-from-browser chrome "gaming lofi" # Bypass bot check using browser cookies`,
+  ytmusic --cookies-from-browser chrome "gaming lofi" # Bypass bot check using browser cookies
+  ytmusic --check               # Verify system dependencies`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Run dependency check if flag is specified
+		if checkDepsFlag {
+			runDependencyCheck()
+			os.Exit(0)
+		}
+
 		m := ui.NewModel()
 
 		// Setup volume override
@@ -59,6 +69,61 @@ Examples:
 	},
 }
 
+func runDependencyCheck() {
+	cyan := lipgloss.NewStyle().Foreground(lipgloss.Color("#00f0ff")).Bold(true)
+	pink := lipgloss.NewStyle().Foreground(lipgloss.Color("#ff007f")).Bold(true)
+	purple := lipgloss.NewStyle().Foreground(lipgloss.Color("#7928ca")).Bold(true)
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("#39ff14")).Bold(true)
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("#ffff00")).Bold(true)
+	gray := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+	bold := lipgloss.NewStyle().Bold(true)
+
+	fmt.Println(cyan.Render("=== ytmusic Cyberpunk Dependency Scanner ==="))
+	fmt.Println()
+
+	dependencies := deps.CheckAll()
+	allOk := true
+	hasWarnings := false
+
+	for _, dep := range dependencies {
+		var statusStr string
+		if dep.Found {
+			statusStr = green.Render(" [🟢 OK] ")
+		} else {
+			if dep.Required {
+				statusStr = pink.Render(" [🔴 MISSING] ")
+				allOk = false
+			} else {
+				statusStr = yellow.Render(" [🟡 WARNING] ")
+				hasWarnings = true
+			}
+		}
+
+		fmt.Printf("%s %s\n", statusStr, bold.Render(dep.Name))
+		fmt.Printf("   %s: %s\n", gray.Render("Description"), dep.Description)
+		if dep.Found {
+			fmt.Printf("   %s: %s\n", gray.Render("Path"), dep.Path)
+			if dep.Version != "" {
+				fmt.Printf("   %s: %s\n", gray.Render("Version"), dep.Version)
+			}
+		} else {
+			fmt.Printf("   %s: %s\n", pink.Render("Install Instructions"), dep.InstallInstructions)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println(purple.Render("==========================================="))
+	if !allOk {
+		fmt.Println(pink.Render("❌ Error: Some required dependencies are missing."))
+		fmt.Println("Please install the missing tools listed above to run the player correctly.")
+	} else if hasWarnings {
+		fmt.Println(yellow.Render("⚠️  Notice: Core dependencies found, but some optional tools are missing."))
+		fmt.Println("The app will work, but you may face issues bypassing bot blocks without Node.js/Deno.")
+	} else {
+		fmt.Println(green.Render("✨ System fully configured! Ready for high-fidelity terminal playback."))
+	}
+}
+
 // Execute triggers the Cobra command execution pipeline
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
@@ -72,4 +137,5 @@ func init() {
 	rootCmd.Flags().IntVarP(&searchLimit, "limit", "l", 15, "Number of search results to fetch")
 	rootCmd.Flags().StringVar(&cookiesFile, "cookies", "", "Path to cookies file")
 	rootCmd.Flags().StringVar(&cookiesFromBrowser, "cookies-from-browser", "", "Load cookies from a specific browser (e.g. chrome, firefox, edge, brave)")
+	rootCmd.Flags().BoolVar(&checkDepsFlag, "check", false, "Verify that all system dependencies are installed correctly")
 }
