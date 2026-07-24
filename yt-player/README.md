@@ -41,6 +41,10 @@ go build -o ytplayer main.go
 
 ## Usage
 
+Get your  YT Cookies(Netscape format) From Get cookies.txt LOCALLY 
+Save it as cookies.txt file 
+
+
 Start the player in search mode:
 ```bash
 ./ytplayer
