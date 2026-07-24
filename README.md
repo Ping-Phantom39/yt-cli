@@ -119,6 +119,9 @@ go build -o ../bin/ytmusic main.go
 
 ## 🕹️ Interactive Controls & Usage
 
+### Run ytmusic from anywhere(global access)
+
+
 ### 1. `ytplayer` (Video Client)
 
 Start the player and launch the interactive terminal interface:
@@ -219,6 +222,108 @@ yt-song-cli/
   * Readme: [yt-song/README.md](file:///home/ubuntu/anime/yt-song-cli/yt-song/README.md)
 
 ---
+
+# Run `ytmusic` Globally Using a Wrapper Script(Possible Encounter Issue)
+
+If `ytmusic` requires a local `--cookies.txt` file, creating a symbolic link with `ln -s` is **not enough**. A symbolic link only points to the executable—it **does not change the current working directory**.
+
+As a result, when you run:
+
+```bash
+ytmusic
+```
+
+from another directory, the application searches for `--cookies.txt` in your **current working directory** instead of the directory containing the binary.
+
+## Solution
+
+Create a **wrapper script** in `/usr/local/bin` that changes to the directory containing the binary before executing it.
+
+### Step 1: Create the wrapper script
+
+```bash
+sudo nano /usr/local/bin/ytmusic
+```
+
+### Step 2: Add the following contents
+
+```bash
+#!/bin/bash
+
+cd /home/codespace/ || exit 1
+exec ./ytmusic "$@"
+```
+
+> **Note:** Replace `/home/codespace/` with the directory where your `ytmusic` binary and `.env` file are located.
+
+### Step 3: Make the wrapper executable
+
+```bash
+sudo chmod +x /usr/local/bin/ytmusic
+```
+
+### Step 4: Run the application
+
+Now you can run the application from **any directory**:
+
+```bash
+ytmusic
+```
+
+## How It Works
+
+The wrapper script performs the following steps:
+
+1. Changes the current working directory to the directory containing the binary.
+2. Executes the `ytmusic` binary.
+3. Forwards any command-line arguments to the application using `"$@"`.
+
+Because the working directory is correct, the application can successfully locate the local `.env` file.
+
+## Why Not Use a Symbolic Link?
+
+For example:
+
+```bash
+sudo ln -s /home/codespace/ytmusic /usr/local/bin/ytmusic
+```
+
+Although this allows the command to be found in your `PATH`, it **does not** change the working directory.
+
+If the Go application loads `.env` like this:
+
+```go
+godotenv.Load()
+```
+
+or
+
+```go
+os.Open(".env")
+```
+
+it searches for:
+
+```
+<current-working-directory>/.env
+```
+
+instead of:
+
+```
+/home/codespace/.env
+```
+
+Therefore, a wrapper script is the simplest solution when you do not want to modify the Go source code.
+
+## Similar work for the ytplayer binary  file too
+
+## Summary
+
+- ✅ Works globally from any directory.
+- ✅ No changes to the Go application are required.
+- ✅ Ensures `.env` is always loaded from the correct location.
+- ✅ Passes all command-line arguments to the application.
 
 ## 📄 License
 
