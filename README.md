@@ -1,6 +1,6 @@
 # ⚡ YouTube Terminal Suite (yt-song-cli)
-![SS of yt-player engine](demo.png)
-[Demo Video on YouTube](https://youtu.be/aq0VeB1LSt8?si=epWLrQFFAEb2CtD4)
+[![SS of yt-player engine](demo.png)](https://youtu.be/aq0VeB1LSt8?si=epWLrQFFAEb2CtD4)
+
 
 [![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
