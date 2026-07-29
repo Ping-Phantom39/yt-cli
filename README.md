@@ -101,14 +101,14 @@ sudo chmod a+rx /usr/local/bin/yt-dlp
 
 ## 🛠️ Compilation & Installation
 
-### ⚡ Quick One-Line Installation (via curl)
-
-#### Install `ytmusic` (Audio Client):
+### 🎵 `ytmusic` (Audio Client)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ping-Phantom39/yt-cli/main/yt-song/scripts/install.sh | bash
 ```
 
-#### Install `ytplayer` (Video Client):
+---
+
+### 🎬 `ytplayer` (Video Client)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ping-Phantom39/yt-cli/main/yt-player/scripts/install.sh | bash
 ```
