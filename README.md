@@ -54,6 +54,38 @@ graph TD
     Speaker -->|CGO Bindings / ALSA / PulseAudio / CoreAudio| Output[OS Sound Output]
 ```
 
+### ⚙️ Deep-Dive Engine Architecture (Under the Hood)
+
+#### 1. 🚀 Cobra CLI Bootstrapper (`cmd/`)
+* **Flag & Argument Parsing**: Built on top of `spf13/cobra`, the bootstrapper parses runtime configuration parameters (`--limit`, `--cookies`, `--cookies-from-browser`, `--vo`, `--check`) and environment overrides.
+* **Environment & Dependency Check**: Executes pre-flight scans verifying that external binaries (`yt-dlp`, `ffmpeg`, `mpv`) and CGO audio headers exist on the host system before spawning the interface.
+* **TUI Lifecyle Management**: Initializes application state structs and bootstraps the main event loop.
+
+#### 2. 🖥️ Bubble Tea Reactive TUI Engine (`internal/ui/`)
+* **Model-View-Update (MVU) Loop**: Powered by `charmbracelet/bubbletea` (Elm architecture pattern). User keystrokes are received as `tea.Msg` events, processed in pure `Update()` functions, and rendered deterministically in `View()`.
+* **Asynchronous Command Orchestration**: Non-blocking network queries and media downloads run in isolated goroutines, dispatching `tea.Cmd` response messages back into the main event loop without freezing user interface animations.
+* **Styling & Layout Rendering**: Uses `charmbracelet/lipgloss` for cyberpunk neon borders, HSL gradient text, and dynamic viewport calculation, alongside `charmbracelet/bubbles` for text input inputs and progress bar components.
+
+#### 3. 📥 Asynchronous Downloader Engine (`internal/downloader/`)
+* **Metadata Extraction**: Spawns sub-processes of `yt-dlp` using Go's `os/exec.Command` with flags (`--dump-json`, `--flat-playlist`). Reads standard output streams in real-time to parse JSON video metadata (ID, title, channel, duration, view count) into strongly-typed Go structs.
+* **Transcoding & Multiplexing Pipe**:
+  * **Video (`ytplayer`)**: Invokes `yt-dlp` to download best-quality separate video and audio streams, piping them to `ffmpeg` for container multiplexing into high-definition `.mp4` files inside `downloads/`.
+  * **Audio (`ytmusic`)**: Triggers `yt-dlp` audio extraction and uses `ffmpeg` to transcode streams into `.mp3` files formatted specifically for low-latency PCM decoding.
+* **Real-time Progress Parsing**: Intercepts `stdout` lines matching percentage regex patterns (`[download] XX.X%`), emitting real-time progress update messages to the TUI progress bar component.
+
+#### 4. 🎬 `mpv` Video Process Controller (`yt-player/internal/player/`)
+* **Terminal Handover Protocol**: Uses Bubble Tea's `tea.ExecProcess` wrapper. When a user streams a video, the TUI loop is cleanly suspended, handing standard input/output over to the native `mpv` binary.
+* **Hardware & Terminal Video Drivers**: Leverages `mpv`'s video output (`--vo`) capabilities, allowing seamless switching between external GUI windows (`gpu`, `x11`) and terminal graphics rendering (`tct`, `sixel`, `kitty`).
+* **Auto-Resume**: Upon `mpv` exit or termination signal, the terminal buffer is restored, and the Bubble Tea TUI seamlessly resumes playback state.
+
+#### 5. 🔊 Beep Audio Engine & CGO Speaker (`yt-song/internal/player/`)
+* **PCM Buffer Decoding**: Built using `gopxl/beep`. Reads local `.mp3` audio files and streams them into floating-point PCM audio buffers.
+* **Logarithmic Volume Control**: Rather than simple linear volume scaling, volume adjustments use a logarithmic scale (`math.Pow`) to match natural human auditory perception curves.
+* **Low-Level OS Sound Integration**: Uses CGO bindings to interface directly with OS native sound system APIs:
+  * **Linux**: ALSA (`libasound2`) / PulseAudio / PipeWire.
+  * **macOS**: CoreAudio.
+  * **Windows**: WASAPI.
+
 ---
 
 ## 🚀 System Requirements & Setup
