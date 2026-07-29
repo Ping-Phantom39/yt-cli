@@ -1,8 +1,8 @@
 # ⚡ YouTube Terminal Suite (yt-song-cli)
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/Ping-Phantom39/yt-song-cli?filename=yt-song%2Fgo.mod&style=flat-square&color=00ADD8)](https://golang.org/)
-[![License](https://img.shields.io/github/license/Ping-Phantom39/yt-song-cli?style=flat-square&color=blue)](LICENSE)
-[![Platform Support](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/Ping-Phantom39/yt-song-cli)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/Ping-Phantom39/yt-cli?filename=yt-song%2Fgo.mod&style=flat-square&color=00ADD8)](https://golang.org/)
+[![License](https://img.shields.io/github/license/Ping-Phantom39/yt-cli?style=flat-square&color=blue)](LICENSE)
+[![Platform Support](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/Ping-Phantom39/yt-cli)
 [![Built with Bubble Tea](https://img.shields.io/badge/built%20with-Bubble%20Tea-magenta?style=flat-square)](https://github.com/charmbracelet/bubbletea)
 
 Welcome to the **YouTube Terminal Suite** (`yt-song-cli`), a professional monorepo housing two high-performance, keyboard-driven Go CLI applications styled with a sleek cyberpunk aesthetic. The suite features a video streaming player (`ytplayer`) and an offline audio player/downloader (`ytmusic`), providing the ultimate terminal-native YouTube media experience.
