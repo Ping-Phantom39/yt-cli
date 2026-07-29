@@ -97,6 +97,25 @@ sudo apt install ytmusic
 > [!WARNING]
 > **Disclaimer**: Installing via PPA automatically includes all necessary packages (`yt-dlp`, `mpv`, `ffmpeg`, `libasound2-dev`) along with the binary, which may be **600 – 700 MB** in total download size.
 
+#### ⚠️ Possible Errors & Troubleshooting
+
+* **Outdated `yt-dlp` Version (`403 Forbidden` / Bot Block Errors)**:
+  System or PPA repositories may package an older version of `yt-dlp` that causes playback/search failures with YouTube API changes. Upgrade `yt-dlp` to the latest release using pip:
+  ```bash
+  python3 -m pip install -U yt-dlp
+  ```
+  or update directly via official GitHub binary:
+  ```bash
+  sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+  sudo chmod a+rx /usr/local/bin/yt-dlp
+  ```
+
+* **Missing Audio Backend Libraries**:
+  If audio output or CGO bindings fail to launch, ensure sound packages are installed:
+  ```bash
+  sudo apt-get install -y libasound2-dev alsa-utils
+  ```
+
 ---
 
 ### ⚡ Quick One-Line Installation (via curl)
