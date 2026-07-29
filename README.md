@@ -5,6 +5,16 @@
 [![Platform Support](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/Ping-Phantom39/yt-cli)
 [![Built with Bubble Tea](https://img.shields.io/badge/built%20with-Bubble%20Tea-magenta?style=flat-square)](https://github.com/charmbracelet/bubbletea)
 
+## 🖥️ Supported Operating Systems
+
+The tools are written in Go and rely on native audio/video back‑ends. They have been tested and are officially supported on:
+
+- **Linux** (Ubuntu, Debian, Fedora, etc.) – requires ALSA/PulseAudio/pipewire libraries.
+- **macOS** – uses CoreAudio via the `beep` library.
+- **Windows** – builds with CGO and uses WASAPI; however the current CI and packaging focus on Linux/macOS.
+
+For other platforms you may need to install the required audio/video dependencies manually.
+
 Welcome to the **YouTube Terminal Suite** (`yt-song-cli`), a professional monorepo housing two high-performance, keyboard-driven Go CLI applications styled with a sleek cyberpunk aesthetic. The suite features a video streaming player (`ytplayer`) and an offline audio player/downloader (`ytmusic`), providing the ultimate terminal-native YouTube media experience.
 
 ---
