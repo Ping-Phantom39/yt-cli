@@ -101,15 +101,28 @@ sudo chmod a+rx /usr/local/bin/yt-dlp
 
 ## 🛠️ Compilation & Installation
 
+### ⚡ Quick One-Line Installation (via curl)
+
+#### Install `ytmusic` (Audio Client):
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ping-Phantom39/yt-cli/main/yt-song/scripts/install.sh | bash
+```
+
+#### Install `ytplayer` (Video Client):
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ping-Phantom39/yt-cli/main/yt-player/scripts/install.sh | bash
+```
+
+### Manual Compilation from Source
 Ensure you have **Go 1.22+** installed on your system. Navigate to the desired module directory to build:
 
-### Build `ytplayer`
+#### Build `ytplayer`
 ```bash
 cd yt-player
 go build -o ../bin/ytplayer main.go
 ```
 
-### Build `ytmusic`
+#### Build `ytmusic`
 ```bash
 cd yt-song
 go build -o ../bin/ytmusic main.go

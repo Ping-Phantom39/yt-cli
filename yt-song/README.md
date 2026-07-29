@@ -84,9 +84,17 @@ ffmpeg -version
 
 ---
 
-## 🛠️ Compilation
+## 🛠️ Installation & Compilation
 
-Ensure you are using **Go 1.22+** (compiled successfully on Go 1.26.0):
+### ⚡ Quick One-Line Installation (via curl)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ping-Phantom39/yt-cli/main/yt-song/scripts/install.sh | bash
+```
+
+### Manual Compilation
+
+Ensure you are using **Go 1.22+**:
 
 1. **Download Go dependencies**:
    ```bash
