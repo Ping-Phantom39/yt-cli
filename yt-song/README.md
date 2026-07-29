@@ -176,3 +176,15 @@ If your environment's IP address (e.g., a VPS or cloud server) is being throttle
    ./ytmusic --cookies-from-browser chrome "lofi beats"
    ```
    Supported browser flags: `chrome`, `firefox`, `brave`, `safari`, `edge`.
+
+## 📁 Streaming Temporary File Location
+
+When you play a track (press **Enter** on a search result), the binary creates a temporary directory under the system temporary area (e.g., `/tmp/ytmusic-XXXXXX`). The MP3 stream is written to a file named `<video-id>.mp3` inside that directory. The path is kept in the UI model as `m.currentTempFile`. As soon as playback finishes or you stop it, the temporary file **and its parent directory** are automatically removed.
+
+**Key points**
+
+- **Location**: a temporary directory under `/tmp` (e.g., `/tmp/ytmusic-abc123/...`).
+- **Lifetime**: only while the track is playing; the file is deleted automatically after playback.
+- **Permanent download**: press **`d`** to save the audio to `./downloads/<video-id>.mp3`.
+
+This ensures streaming does not leave residual files on disk.
