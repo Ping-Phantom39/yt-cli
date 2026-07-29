@@ -101,14 +101,27 @@ sudo chmod a+rx /usr/local/bin/yt-dlp
 
 ## 🛠️ Compilation & Installation
 
-### 🎵 `ytmusic` (Audio Client)
+### 📦 Download via Ubuntu PPA
+
+```bash
+sudo add-apt-repository ppa:kamalchad/ytmusic
+sudo apt update
+sudo apt install ytmusic
+```
+
+> [!WARNING]
+> **Disclaimer**: Installing via PPA automatically includes all necessary packages (`yt-dlp`, `mpv`, `ffmpeg`, `libasound2-dev`) along with the binary, which may be **600 – 700 MB** in total download size.
+
+---
+
+### 🎵 `ytmusic` (Audio Client via Script)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ping-Phantom39/yt-cli/main/yt-song/scripts/install.sh | bash
 ```
 
 ---
 
-### 🎬 `ytplayer` (Video Client)
+### 🎬 `ytplayer` (Video Client via Script)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ping-Phantom39/yt-cli/main/yt-player/scripts/install.sh | bash
 ```

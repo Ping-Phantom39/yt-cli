@@ -86,6 +86,19 @@ ffmpeg -version
 
 ## 🛠️ Installation & Compilation
 
+### 📦 Download via Ubuntu PPA
+
+```bash
+sudo add-apt-repository ppa:kamalchad/ytmusic
+sudo apt update
+sudo apt install ytmusic
+```
+
+> [!WARNING]
+> **Disclaimer**: Installing via PPA automatically includes all necessary packages (`yt-dlp`, `mpv`, `ffmpeg`, `libasound2-dev`) along with the binary, which may be **600 – 700 MB** in total download size.
+
+---
+
 ### ⚡ Quick One-Line Installation (via curl)
 
 ```bash
