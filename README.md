@@ -1,7 +1,7 @@
 # ⚡ YouTube Terminal Suite (yt-song-cli)
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/Ping-Phantom39/yt-cli?filename=yt-song%2Fgo.mod&style=flat-square&color=00ADD8)](https://golang.org/)
-[![License](https://img.shields.io/github/license/Ping-Phantom39/yt-cli?style=flat-square&color=blue)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go)](https://golang.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 [![Platform Support](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/Ping-Phantom39/yt-cli)
 [![Built with Bubble Tea](https://img.shields.io/badge/built%20with-Bubble%20Tea-magenta?style=flat-square)](https://github.com/charmbracelet/bubbletea)
 
@@ -15,8 +15,8 @@ This repository contains two decoupled, highly modular Go utilities:
 
 | Component | Target Directory | Binary Name | Description | Key Technologies |
 |---|---|---|---|---|
-| **Video Client** | [`/yt-player`](file:///home/ubuntu/anime/yt-song-cli/yt-player) | `ytplayer` | Cyberpunk terminal video searcher, downloader, and mpv-backed streaming player. | `yt-dlp`, Bubble Tea, `mpv` |
-| **Audio Client** | [`/yt-song`](file:///home/ubuntu/anime/yt-song-cli/yt-song) | `ytmusic` | Highly optimized music player with low-level audio streaming and local MP3 caching. | `yt-dlp`, Bubble Tea, `gopxl/beep` |
+| **Video Client** | [`/yt-player`](yt-player) | `ytplayer` | Cyberpunk terminal video searcher, downloader, and mpv-backed streaming player. | `yt-dlp`, Bubble Tea, `mpv` |
+| **Audio Client** | [`/yt-song`](yt-song) | `ytmusic` | Highly optimized music player with low-level audio streaming and local MP3 caching. | `yt-dlp`, Bubble Tea, `gopxl/beep` |
 
 ---
 
@@ -215,11 +215,11 @@ yt-song-cli/
 ### 🔗 Quick Navigation
 
 * **Video Player (`yt-player`):**
-  * Entry point: [yt-player/main.go](file:///home/ubuntu/anime/yt-song-cli/yt-player/main.go)
-  * Readme: [yt-player/README.md](file:///home/ubuntu/anime/yt-song-cli/yt-player/README.md)
+  * Entry point: [yt-player/main.go](yt-player/main.go)
+  * Readme: [yt-player/README.md](yt-player/README.md)
 * **Audio Player (`yt-song`):**
-  * Entry point: [yt-song/main.go](file:///home/ubuntu/anime/yt-song-cli/yt-song/main.go)
-  * Readme: [yt-song/README.md](file:///home/ubuntu/anime/yt-song-cli/yt-song/README.md)
+  * Entry point: [yt-song/main.go](yt-song/main.go)
+  * Readme: [yt-song/README.md](yt-song/README.md)
 
 ---
 
