@@ -34,34 +34,34 @@ This repository contains two decoupled, highly modular Go utilities:
 
 The following diagram illustrates how the CLI tools leverage standard Go layouts and external binaries for media scraping, multiplexing, transcoding, and low-level playback:
 
+
 ```mermaid
 graph TD
-    subgraph Monorepo [yt-song-cli Workspace]
+    subgraph Monorepo["yt-song-cli Workspace"]
         direction TB
-        subgraph YTPlayer [ytplayer / Video Client]
-            VP_Cmd[Cobra CLI Bootstrapper] --> VP_UI[Bubble Tea UI]
-            VP_UI --> VP_DL[Downloader Engine]
-            VP_UI --> VP_Exec[mpv Exec Process]
+        subgraph YTPlayer["ytplayer (Video Client)"]
+            VP_Cmd["Cobra CLI Bootstrapper"] --> VP_UI["Bubble Tea UI"]
+            VP_UI --> VP_DL["Downloader Engine"]
+            VP_UI --> VP_Exec["mpv Exec Process"]
         end
-        
-        subgraph YTMusic [ytmusic / Audio Client]
-            MU_Cmd[Cobra CLI Bootstrapper] --> MU_UI[Bubble Tea UI]
-            MU_UI --> MU_DL[Downloader Engine]
-            MU_UI --> MU_Play[Beep Audio Engine]
+
+        subgraph YTMusic["ytmusic (Audio Client)"]
+            MU_Cmd["Cobra CLI Bootstrapper"] --> MU_UI["Bubble Tea UI"]
+            MU_UI --> MU_DL["Downloader Engine"]
+            MU_UI --> MU_Play["Beep Audio Engine"]
         end
     end
-    
+
     %% External Processes
-    VP_DL -->|Asynchronous exec.Command| YTDLP[yt-dlp Binary]
-    MU_DL -->|Asynchronous exec.Command| YTDLP
-    
-    YTDLP -->|Raw Audio/Video Streams| FFMPEG[ffmpeg Transcoder]
-    FFMPEG -->|Merge MP4| VP_Local[Local downloads/ Cache]
-    FFMPEG -->|Extract MP3| MU_Local[Local downloads/ Cache]
-    
-    VP_Exec -->|Stream Video/Audio| MPV[mpv Engine]
-    MU_Play -->|Logarithmic Volume & Resampling| Speaker[gopxl/beep Speaker Streamer]
-    Speaker -->|CGO Bindings / ALSA / PulseAudio / CoreAudio| Output[OS Sound Output]
+    VP_DL -->|exec.Command| YTDLP["yt-dlp Binary"]
+    MU_DL -->|exec.Command| YTDLP
+    YTDLP -->|Raw Streams| FFMPEG["ffmpeg Transcoder"]
+    FFMPEG -->|Merge MP4| VP_Local["Local downloads / Cache"]
+    FFMPEG -->|Extract MP3| MU_Local["Local downloads / Cache"]
+
+    VP_Exec -->|Stream Video/Audio| MPV["mpv Engine"]
+    MU_Play -->|Volume & Resampling| Speaker["gopxl/beep Speaker"]
+    Speaker -->|Audio Output| Output["OS Sound Output"]
 ```
 
 ### ⚙️ Deep-Dive Engine Architecture (Under the Hood)
