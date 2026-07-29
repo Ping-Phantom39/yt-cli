@@ -1,5 +1,9 @@
 # ⚡ YouTube Terminal Suite (yt-song-cli)
 ![SS of yt-player engine](demo.png)
+
+<video controls src="demo.webm" style="max-width: 100%; height: auto;">
+Your browser does not support the video tag.
+</video>
 [![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 [![Platform Support](https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/Ping-Phantom39/yt-cli)
