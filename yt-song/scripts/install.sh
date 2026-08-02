@@ -143,34 +143,9 @@ main() {
     TAG="${VERSION:-main}"
     BRANCH="${BRANCH:-main}"
 
-    # Candidate URLs for direct raw binary in repo
-    RAW_URLS=(
-        "https://raw.githubusercontent.com/${REPO}/${BRANCH}/${BINARY_REPO_PATH}"
-        "https://github.com/${REPO}/raw/${BRANCH}/${BINARY_REPO_PATH}"
-        "https://github.com/${REPO}/blob/${BRANCH}/${BINARY_REPO_PATH}?raw=true"
-    )
-
-    if [ -z "$VERSION" ]; then
-        log_info "Attempting to download binary directly from repository (${REPO} @ ${BRANCH})..."
-        for url in "${RAW_URLS[@]}"; do
-            log_info "Checking asset URL: ${url}..."
-            if $HTTP_GET "$url" > "$FOUND_BINARY" 2>/dev/null && [ -s "$FOUND_BINARY" ]; then
-                # Ensure downloaded output is not an HTML 404/error page
-                if ! head -n 5 "$FOUND_BINARY" | grep -qi "<html"; then
-                    log_success "Successfully downloaded binary from repository!"
-                    DOWNLOADED=1
-                    break
-                fi
-            fi
-            rm -f "$FOUND_BINARY"
-        done
-    fi
-
-    # Fallback to GitHub Releases if direct repo binary download did not succeed
-    if [ "$DOWNLOADED" -eq 0 ]; then
-        TARGET_VERSION="${VERSION:-latest}"
-        log_info "Fetching release tag / metadata from GitHub (${REPO})..."
-        RELEASE_JSON_URL="https://api.github.com/repos/${REPO}/releases/latest"
+    TARGET_VERSION="${VERSION:-latest}"
+    log_info "Fetching release tag / metadata from GitHub (${REPO})..."
+    RELEASE_JSON_URL="https://api.github.com/repos/${REPO}/releases/latest"
         
         # Try fetching from GitHub API
         RELEASE_DATA=$($HTTP_GET "$RELEASE_JSON_URL" 2>/dev/null || true)
@@ -262,7 +237,6 @@ main() {
                 fi
             fi
         fi
-    fi
 
     if [ "$DOWNLOADED" -eq 0 ] || [ ! -f "$FOUND_BINARY" ]; then
         log_error "Could not download ${BINARY_NAME} binary from repository (https://github.com/${REPO}/tree/${BRANCH}/${BINARY_REPO_PATH}) or release assets."
