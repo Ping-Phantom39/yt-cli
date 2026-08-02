@@ -1,7 +1,10 @@
 # Binaries
-ytplayer
-ytsong
+ytplayer*
+ytsong*
+ytmusic*
 bin/
 downloads/
 cookies.txt
 *.exe
+*.zip
+*.tar.gz
