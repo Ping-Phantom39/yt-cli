@@ -8,7 +8,8 @@ A high-performance cyberpunk terminal video searcher, downloader, and mpv-backed
 
 ## Features
 - **Instant Streaming**: Play videos directly using `mpv` without downloading the full file first.
-- **Background Downloader**: Download the best available video + audio tracks and merge them into a single high-quality `.mp4` file.
+- **Background Downloader**: Download the best available video + audio tracks and merge them into a single high-quality `.mp4` file saved with the video's title.
+- **Local Offline Video Mode**: Play local offline video files (`.mp4`, `.mkv`, `.avi`, `.webm`, `.mov`, etc.) from your current directory and `./downloads/` folder with real-time title filtering.
 - **Cyberpunk UI**: Bubble Tea-powered terminal user interface with glowing cyan, pink, and purple aesthetics.
 - **Headless Mode Support**: Auto-detects terminal environments (missing GUI/X11 displays) and fallback to terminal-friendly rendering (`--vo=tct` or customized driver).
 - **Cookies & Bypass Auth**: Supports passing `--cookies` and `--cookies-from-browser` flags, automatically resolving challenges.
@@ -50,6 +51,11 @@ Start the player in search mode:
 ./ytplayer
 ```
 
+Start directly in Local Offline Video mode:
+```bash
+./ytplayer --local
+```
+
 Start the player and search immediately:
 ```bash
 ./ytplayer "lofi hip hop beats"
@@ -71,6 +77,7 @@ Scan and check system dependencies:
 ```
 
 ### Options and Flags
+- `-m, --local`: Start directly in Local Offline Video mode.
 - `-l, --limit int`: Number of search results to fetch (default `15`).
 - `--cookies string`: Path to cookies file (automatically detects `cookies.txt` in current directory if present).
 - `--cookies-from-browser string`: Load cookies from a specific browser (e.g., `chrome`, `firefox`, `edge`, `brave`).
@@ -80,9 +87,10 @@ Scan and check system dependencies:
 ---
 
 ## Keybindings (TUI)
-- `[/]` - Focus the search bar to enter a new query.
-- `[Enter]` - Stream and play the selected video instantly using `mpv` (or play local file if already downloaded).
-- `[d]` - Download the video permanently to `./downloads/` folder as an `.mp4`.
+- `[/]` - Focus the search bar to enter a new query or filter local videos.
+- `[m]` - Toggle between **Online YouTube Mode** and **Local Offline Video Mode**.
+- `[Enter]` - Stream and play the selected video instantly using `mpv` (or play local video file).
+- `[d]` - Download the video permanently to `./downloads/` folder as `<Video_Title>.mp4`.
 - `[Esc]` - Blur/unfocus the search bar.
 - `[q]` or `[Ctrl+C]` - Quit the application.
 
@@ -91,4 +99,5 @@ Scan and check system dependencies:
 ## How It Works
 1. **Search**: Spawns `yt-dlp` in flat-playlist mode, parsing stdout JSON streams as they arrive.
 2. **Playback (Stream/File)**: Uses Bubble Tea's `tea.ExecProcess`. It suspends the TUI, hands standard input/output over to `mpv`, and resumes the TUI seamlessly once `mpv` exits.
-3. **Download**: Triggers `yt-dlp` to download high-quality video and audio feeds separately and merges them via `ffmpeg` into a single `.mp4` file. A progress bar updates in real-time in the bottom panel.
+3. **Download**: Triggers `yt-dlp` to download high-quality video and audio feeds separately and merges them via `ffmpeg` into a single `.mp4` file named after the video's title. A progress bar updates in real-time in the bottom panel.
+4. **Local Offline Mode**: Scans local directories for video files and lets you browse, filter, and play them directly without an internet connection.

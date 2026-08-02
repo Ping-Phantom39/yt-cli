@@ -149,16 +149,30 @@ When the application is running, navigate the UI with these interactive keyboard
 
 | Key | Action |
 |---|---|
-| `/` | Focus search bar (allows typing queries) |
-| `Enter` (in search) | Submit and perform asynchronous search query |
+| `/` | Focus search bar (allows typing queries or filtering local tracks) |
+| `m` | Toggle between **Online YouTube Mode** and **Local Offline Music Mode** |
+| `Enter` (in search) | Submit search query (or apply filter in local mode) |
 | `Esc` (in search) | Defocus search input and return to list navigation |
 | `Up` / `Down` or `k` / `j` | Navigate selection list |
-| `Enter` (in list) | Download and start playing the highlighted track |
+| `Enter` (in list) | Play highlighted track (streams from YouTube or plays local file) |
+| `d` | Download song permanently to `./downloads/<Song_Title>.mp3` |
 | `Space` | Toggle Play / Pause |
 | `s` | Stop audio playback |
 | `Left` / `Right` or `h` / `l` | Seek backward or forward by **5 seconds** |
 | `[` / `]` | Lower or raise volume by **5%** (Logarithmic scale) |
 | `q` or `Ctrl+C` | Halt audio, cancel ongoing downloads, and exit player |
+
+---
+
+## 🎵 Local Offline Music Mode
+
+Launch directly into Local Offline Music Mode to browse, search/filter, and play your local audio collection (`.mp3`, `.m4a`, `.flac`, `.wav`, `.aac`, `.opus`, `.ogg`, `.wma`):
+
+```bash
+./ytmusic --local
+```
+
+You can also press **`[m]`** anytime within the TUI to toggle between Online YouTube mode and Local Offline Music mode.
 
 ---
 
@@ -179,12 +193,12 @@ If your environment's IP address (e.g., a VPS or cloud server) is being throttle
 
 ## 📁 Streaming Temporary File Location
 
-When you play a track (press **Enter** on a search result), the binary creates a temporary directory under the system temporary area (e.g., `/tmp/ytmusic-XXXXXX`). The MP3 stream is written to a file named `<video-id>.mp3` inside that directory. The path is kept in the UI model as `m.currentTempFile`. As soon as playback finishes or you stop it, the temporary file **and its parent directory** are automatically removed.
+When you play a track (press **Enter** on an online search result), the binary creates a temporary directory under the system temporary area (e.g., `/tmp/ytmusic-XXXXXX`). The MP3 stream is written to a file named `<video-id>.mp3` inside that directory. The path is kept in the UI model as `m.currentTempFile`. As soon as playback finishes or you stop it, the temporary file **and its parent directory** are automatically removed.
 
 **Key points**
 
 - **Location**: a temporary directory under `/tmp` (e.g., `/tmp/ytmusic-abc123/...`).
 - **Lifetime**: only while the track is playing; the file is deleted automatically after playback.
-- **Permanent download**: press **`d`** to save the audio to `./downloads/<video-id>.mp3`.
+- **Permanent download**: press **`d`** to save the audio to `./downloads/<Song_Title>.mp3`.
 
 This ensures streaming does not leave residual files on disk.
