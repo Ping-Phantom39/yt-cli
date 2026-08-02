@@ -18,6 +18,7 @@ var (
 	cookiesFromBrowser string
 	videoOutput        string
 	checkDepsFlag      bool
+	startLocalMode     bool
 )
 
 var rootCmd = &cobra.Command{
@@ -28,6 +29,7 @@ Developed in Go, leveraging yt-dlp, Bubble Tea, and mpv.
 
 Examples:
   ytplayer                       # Start the player in search mode
+  ytplayer --local               # Start directly in Local Offline Video mode
   ytplayer "cyberpunk synthwave" # Start the player and search immediately
   ytplayer --vo tct "lofi beats" # Render video in terminal using true-color text (headless)
   ytplayer --cookies cookies.txt # Bypass bot check using a cookies file
@@ -40,6 +42,10 @@ Examples:
 		}
 
 		m := ui.NewModel()
+
+		if startLocalMode {
+			m.SetLocalMode(true)
+		}
 
 		// Auto-detect cookies.txt in the current directory if no --cookies flag was given
 		if cookiesFile == "" && cookiesFromBrowser == "" {
@@ -137,5 +143,6 @@ func init() {
 	rootCmd.Flags().StringVar(&cookiesFile, "cookies", "", "Path to cookies file")
 	rootCmd.Flags().StringVar(&cookiesFromBrowser, "cookies-from-browser", "", "Load cookies from a specific browser (e.g. chrome, firefox, edge, brave)")
 	rootCmd.Flags().StringVar(&videoOutput, "vo", "", "Force custom mpv video output driver (e.g. tct, sixel, kitty, gpu)")
+	rootCmd.Flags().BoolVarP(&startLocalMode, "local", "m", false, "Start in Local Offline Video mode")
 	rootCmd.Flags().BoolVar(&checkDepsFlag, "check", false, "Verify that all system dependencies are installed correctly")
 }
