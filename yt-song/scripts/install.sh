@@ -211,10 +211,11 @@ main() {
 
             if [ -z "$DOWNLOAD_URL" ]; then
                 CANDIDATES=(
+                    "${BINARY_NAME}-${OS}-${ARCH}.tar.gz"
+                    "${BINARY_NAME}-${OS}-${ARCH}.zip"
                     "${BINARY_NAME}_${VERSION_NUM}_${OS}_${ARCH}.tar.gz"
                     "${BINARY_NAME}_${VERSION_NUM}_${OS_CAP}_${ARCH_ALT}.tar.gz"
                     "${BINARY_NAME}_${OS}_${ARCH}.tar.gz"
-                    "${BINARY_NAME}-${OS}-${ARCH}.tar.gz"
                     "${BINARY_NAME}_${OS}_${ARCH}"
                     "${BINARY_NAME}-${OS}-${ARCH}"
                     "${BINARY_NAME}_${VERSION_NUM}_${OS}_${ARCH}.zip"
