@@ -18,6 +18,7 @@ var (
 	cookiesFile        string
 	cookiesFromBrowser string
 	checkDepsFlag      bool
+	startLocalMode     bool
 )
 
 var rootCmd = &cobra.Command{
@@ -28,6 +29,7 @@ Developed in Go, leveraging yt-dlp, Bubble Tea, and gopxl/beep.
 
 Examples:
   ytmusic                       # Start the player in search mode
+  ytmusic --local               # Start directly in Local Offline Music mode
   ytmusic "lofi hip hop beats"  # Start the player and search immediately
   ytmusic -v 0.5 "synthwave"    # Start with 50% volume and search synthwave
   ytmusic --cookies-from-browser chrome "gaming lofi" # Bypass bot check using browser cookies
@@ -40,6 +42,10 @@ Examples:
 		}
 
 		m := ui.NewModel()
+
+		if startLocalMode {
+			m.SetLocalMode(true)
+		}
 
 		// Setup volume override
 		m.SetVolumeLevel(startVolume)
@@ -137,5 +143,6 @@ func init() {
 	rootCmd.Flags().IntVarP(&searchLimit, "limit", "l", 15, "Number of search results to fetch")
 	rootCmd.Flags().StringVar(&cookiesFile, "cookies", "", "Path to cookies file")
 	rootCmd.Flags().StringVar(&cookiesFromBrowser, "cookies-from-browser", "", "Load cookies from a specific browser (e.g. chrome, firefox, edge, brave)")
+	rootCmd.Flags().BoolVarP(&startLocalMode, "local", "m", false, "Start in Local Offline Music mode")
 	rootCmd.Flags().BoolVar(&checkDepsFlag, "check", false, "Verify that all system dependencies are installed correctly")
 }

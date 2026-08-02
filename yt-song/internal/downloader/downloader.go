@@ -28,6 +28,9 @@ type Video struct {
 func (v Video) FormatDuration() string {
 	d := int(v.Duration)
 	if d <= 0 {
+		if strings.HasPrefix(v.ID, "local:") {
+			return "LOCAL"
+		}
 		return "0:00"
 	}
 	hours := d / 3600
@@ -38,6 +41,104 @@ func (v Video) FormatDuration() string {
 		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, seconds)
 	}
 	return fmt.Sprintf("%d:%02d", minutes, seconds)
+}
+
+// ScanLocalMusic scans specified directories for local audio files.
+func ScanLocalMusic(dirs ...string) ([]Video, error) {
+	var videos []Video
+	seen := make(map[string]bool)
+
+	validExts := map[string]bool{
+		".mp3":  true,
+		".m4a":  true,
+		".flac": true,
+		".wav":  true,
+		".aac":  true,
+		".opus": true,
+		".ogg":  true,
+		".wma":  true,
+	}
+
+	for _, dir := range dirs {
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			continue
+		}
+
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+
+			ext := strings.ToLower(filepath.Ext(entry.Name()))
+			if !validExts[ext] {
+				continue
+			}
+
+			fullPath := filepath.Join(dir, entry.Name())
+			absPath, err := filepath.Abs(fullPath)
+			if err != nil {
+				absPath = fullPath
+			}
+
+			if seen[absPath] {
+				continue
+			}
+			seen[absPath] = true
+
+			// Title is file name without extension
+			title := entry.Name()
+			if ext != "" {
+				title = title[:len(title)-len(ext)]
+			}
+
+			folderName := filepath.Base(dir)
+			if dir == "." {
+				folderName = "Current Dir"
+			}
+
+			video := Video{
+				ID:          "local:" + absPath,
+				Title:       title,
+				Uploader:    fmt.Sprintf("Local (%s)", folderName),
+				URL:         absPath,
+				Description: fmt.Sprintf("Local audio file: %s", fullPath),
+			}
+
+			videos = append(videos, video)
+		}
+	}
+
+	return videos, nil
+}
+
+// SanitizeFilename cleans a string to make it safe for use as a filename across operating systems.
+func SanitizeFilename(name string) string {
+	// Replace illegal filename characters (\, /, :, *, ?, ", <, >, |, NUL, control chars) with '_'
+	invalidChars := regexp.MustCompile(`[\\/:*?"<>|\x00-\x1f]`)
+	sanitized := invalidChars.ReplaceAllString(name, "_")
+
+	// Collapse spaces and underscores surrounding invalid characters
+	multiSpaceUnderscore := regexp.MustCompile(`[ _]*_[ _]*`)
+	sanitized = multiSpaceUnderscore.ReplaceAllString(sanitized, "_")
+
+	// Trim leading and trailing spaces, dots, and underscores
+	sanitized = strings.Trim(sanitized, " ._")
+
+	// Limit length to 200 runes
+	runes := []rune(sanitized)
+	if len(runes) > 200 {
+		sanitized = strings.Trim(string(runes[:200]), " ._")
+	}
+
+	if sanitized == "" {
+		return "song"
+	}
+	return sanitized
 }
 
 // ResolvePath checks for yt-dlp in the local bin/ folder, and falls back to system PATH.

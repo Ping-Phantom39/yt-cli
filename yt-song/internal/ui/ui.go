@@ -135,6 +135,10 @@ type Model struct {
 	CookiesFile        string
 	CookiesFromBrowser string
 
+	// Local Music state
+	isLocalMode bool
+	localVideos []downloader.Video
+
 	// Terminal constraints
 	width  int
 	height int
@@ -193,6 +197,40 @@ func (m *Model) SetCookies(cookiesFile, cookiesFromBrowser string) {
 	m.CookiesFromBrowser = cookiesFromBrowser
 }
 
+// SetLocalMode configures whether the TUI starts in Local Offline mode or Online YouTube mode.
+func (m *Model) SetLocalMode(local bool) {
+	m.isLocalMode = local
+	if local {
+		m.searchInput.Placeholder = "Filter local songs..."
+		m.loadLocalMusic()
+	} else {
+		m.searchInput.Placeholder = "Enter artist, song, or video title..."
+	}
+}
+
+func (m *Model) loadLocalMusic() {
+	videos, _ := downloader.ScanLocalMusic(".", "./downloads")
+	m.localVideos = videos
+	m.filterLocalResults()
+}
+
+func (m *Model) filterLocalResults() {
+	query := strings.ToLower(strings.TrimSpace(m.searchInput.Value()))
+	if query == "" {
+		m.results = m.localVideos
+	} else {
+		var filtered []downloader.Video
+		for _, v := range m.localVideos {
+			if strings.Contains(strings.ToLower(v.Title), query) || strings.Contains(strings.ToLower(v.Uploader), query) {
+				filtered = append(filtered, v)
+			}
+		}
+		m.results = filtered
+	}
+	m.cursor = 0
+	m.startIdx = 0
+}
+
 // Init initializes the Bubble Tea model (sets up initial commands)
 func (m *Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
@@ -201,7 +239,9 @@ func (m *Model) Init() tea.Cmd {
 		waitForTrackFinished(m.trackFinishedChan),
 	}
 
-	if m.searching && m.searchInput.Value() != "" {
+	if m.isLocalMode {
+		m.loadLocalMusic()
+	} else if m.searching && m.searchInput.Value() != "" {
 		cmds = append(cmds, m.searchCmd(context.Background(), m.searchInput.Value()))
 	}
 
@@ -288,11 +328,20 @@ func (m *Model) startDownloadAndPlay(video downloader.Video) tea.Cmd {
 	ctx, m.downloadCancel = context.WithCancel(context.Background())
 
 	// Check if a permanent download file already exists in ./downloads
-	permPath := filepath.Join(".", "downloads", fmt.Sprintf("%s.mp3", video.ID))
-	if info, err := os.Stat(permPath); err == nil && !info.IsDir() && info.Size() > 0 {
+	titlePath := filepath.Join(".", "downloads", fmt.Sprintf("%s.mp3", downloader.SanitizeFilename(video.Title)))
+	idPath := filepath.Join(".", "downloads", fmt.Sprintf("%s.mp3", video.ID))
+
+	targetPath := ""
+	if info, err := os.Stat(titlePath); err == nil && !info.IsDir() && info.Size() > 0 {
+		targetPath = titlePath
+	} else if info, err := os.Stat(idPath); err == nil && !info.IsDir() && info.Size() > 0 {
+		targetPath = idPath
+	}
+
+	if targetPath != "" {
 		m.downloading = false
 		m.downloadPercent = 100.0
-		err := m.player.Play(permPath)
+		err := m.player.Play(targetPath)
 		if err != nil {
 			m.downloadErr = fmt.Errorf("playback failed: %v", err)
 		}
@@ -335,7 +384,8 @@ func (m *Model) startPermanentDownload(video downloader.Video) tea.Cmd {
 	var ctx context.Context
 	ctx, m.downloadCancel = context.WithCancel(context.Background())
 
-	outputPath := filepath.Join(".", "downloads", fmt.Sprintf("%s.mp3", video.ID))
+	filename := fmt.Sprintf("%s.mp3", downloader.SanitizeFilename(video.Title))
+	outputPath := filepath.Join(".", "downloads", filename)
 
 	return tea.Batch(
 		m.downloadCmd(ctx, video.ID, outputPath, m.progressChan),
@@ -416,7 +466,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.downloading = false
 		m.downloadPercent = 100.0
 		if m.isPermanentDownload {
-			m.downloadSuccessMsg = fmt.Sprintf("Saved permanently to downloads/%s.mp3", m.playingVideo.ID)
+			m.downloadSuccessMsg = fmt.Sprintf("Saved permanently to downloads/%s", filepath.Base(string(msg)))
 			return m, nil
 		}
 		// Play downloaded path
@@ -471,9 +521,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.Focus()
 				return m, textinput.Blink
 
+			case "m":
+				m.isLocalMode = !m.isLocalMode
+				m.downloadErr = nil
+				m.searchErr = nil
+				m.searching = false
+				if m.isLocalMode {
+					m.searchInput.Placeholder = "Filter local songs..."
+					m.loadLocalMusic()
+				} else {
+					m.searchInput.Placeholder = "Enter artist, song, or video title..."
+					m.results = nil
+				}
+				return m, nil
+
 			case "enter":
 				if len(m.results) > 0 && m.cursor < len(m.results) {
-					playCmd := m.startDownloadAndPlay(m.results[m.cursor])
+					video := m.results[m.cursor]
+					if strings.HasPrefix(video.ID, "local:") {
+						m.player.Stop()
+						m.cleanupTempFiles()
+						m.playingVideo = video
+						err := m.player.Play(video.URL)
+						if err != nil {
+							m.downloadErr = fmt.Errorf("playback failed: %v", err)
+						} else {
+							m.downloadErr = nil
+						}
+						return m, nil
+					}
+					playCmd := m.startDownloadAndPlay(video)
 					return m, playCmd
 				}
 
@@ -515,6 +592,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "enter":
 				query := m.searchInput.Value()
+				if m.isLocalMode {
+					m.filterLocalResults()
+					m.searchInput.Blur()
+					return m, nil
+				}
 				if strings.TrimSpace(query) != "" {
 					m.searching = true
 					m.searchErr = nil
@@ -529,6 +611,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.searchInput, cmd = m.searchInput.Update(msg)
+			if m.isLocalMode {
+				m.filterLocalResults()
+			}
 			return m, cmd
 		}
 	}
@@ -598,6 +683,16 @@ func (m *Model) View() string {
 	s.WriteString(lipgloss.NewStyle().Foreground(cyanColor).Align(lipgloss.Center).Width(m.width).Render(banner))
 	s.WriteString("\n")
 
+	// Mode Badge
+	var modeBadge string
+	if m.isLocalMode {
+		modeBadge = lipgloss.NewStyle().Background(greenColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("📁 LOCAL OFFLINE MUSIC")
+	} else {
+		modeBadge = lipgloss.NewStyle().Background(purpleColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("🌐 ONLINE YOUTUBE MUSIC")
+	}
+	s.WriteString(lipgloss.NewStyle().Align(lipgloss.Center).Width(m.width).Render(modeBadge))
+	s.WriteString("\n\n")
+
 	// Search bar view
 	searchContent := m.searchInput.View()
 	s.WriteString(searchBoxStyle.Width(m.width - 4).Render(searchContent))
@@ -623,7 +718,11 @@ func (m *Model) View() string {
 	} else if m.searchErr != nil {
 		resultsContent = "\n" + lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(errorStyle.Render(fmt.Sprintf("⚠️ Search Failed:\n\n%v", m.searchErr))) + "\n"
 	} else if len(m.results) == 0 {
-		resultsContent = "\n" + lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(infoStyle.Render("No search results found.\n\nPress [/] to focus the search bar and type a query.")) + "\n"
+		if m.isLocalMode {
+			resultsContent = "\n" + lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(infoStyle.Render("No local audio files found in current directory or ./downloads.\n\nPress [m] to switch to Online YouTube search mode.")) + "\n"
+		} else {
+			resultsContent = "\n" + lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(infoStyle.Render("No search results found.\n\nPress [/] to search YouTube, or [m] for Local Offline Music mode.")) + "\n"
+		}
 	} else {
 		var sb strings.Builder
 		headerStr := fmt.Sprintf("  %-*s  %-*s  %6s", maxTitleLen, "TITLE", maxChanLen, "UPLOADER", "DURATION")
@@ -761,12 +860,12 @@ func (m *Model) View() string {
 	helpStr := fmt.Sprintf(
 		" %s %s   %s %s   %s %s   %s %s   %s %s   %s %s   %s %s   %s %s",
 		keyStyle.Render("[/]"), descStyle.Render("Search"),
+		keyStyle.Render("[m]"), descStyle.Render("Mode (Online/Local)"),
 		keyStyle.Render("[Enter]"), descStyle.Render("Play"),
 		keyStyle.Render("[d]"), descStyle.Render("Download"),
 		keyStyle.Render("[Space]"), descStyle.Render("Pause/Resume"),
 		keyStyle.Render("[s]"), descStyle.Render("Stop"),
 		keyStyle.Render("[←/→]"), descStyle.Render("Seek ±5s"),
-		keyStyle.Render("[[/]]"), descStyle.Render("Vol -/+"),
 		keyStyle.Render("[q]"), descStyle.Render("Quit"),
 	)
 	s.WriteString(lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(helpStr))

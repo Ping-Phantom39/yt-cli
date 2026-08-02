@@ -241,7 +241,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case downloadFinishedMsg:
 		m.downloading = false
 		m.downloadPercent = 100.0
-		m.downloadSuccessMsg = fmt.Sprintf("Saved permanently to downloads/%s.mp4", m.downloadVideoID)
+		m.downloadSuccessMsg = fmt.Sprintf("Saved permanently to downloads/%s", filepath.Base(string(msg)))
 		return m, nil
 
 	case downloadErrorMsg:
@@ -292,10 +292,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					video := m.results[m.cursor]
 
 					// Check if a permanent download file already exists in ./downloads
-					permPath := filepath.Join(".", "downloads", fmt.Sprintf("%s.mp4", video.ID))
+					titleFileName := fmt.Sprintf("%s.mp4", downloader.SanitizeFilename(video.Title))
+					titlePath := filepath.Join(".", "downloads", titleFileName)
+					idPath := filepath.Join(".", "downloads", fmt.Sprintf("%s.mp4", video.ID))
+
 					var target string
-					if info, err := os.Stat(permPath); err == nil && !info.IsDir() && info.Size() > 0 {
-						target = permPath
+					if info, err := os.Stat(titlePath); err == nil && !info.IsDir() && info.Size() > 0 {
+						target = titlePath
+					} else if info, err := os.Stat(idPath); err == nil && !info.IsDir() && info.Size() > 0 {
+						target = idPath
 					} else {
 						target = "https://www.youtube.com/watch?v=" + video.ID
 					}
@@ -326,7 +331,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					var ctx context.Context
 					ctx, m.downloadCancel = context.WithCancel(context.Background())
 
-					outputPath := filepath.Join(".", "downloads", fmt.Sprintf("%s.mp4", video.ID))
+					filename := fmt.Sprintf("%s.mp4", downloader.SanitizeFilename(video.Title))
+					outputPath := filepath.Join(".", "downloads", filename)
 
 					return m, tea.Batch(
 						m.downloadCmd(ctx, video.ID, outputPath, m.progressChan),

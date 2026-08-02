@@ -41,6 +41,31 @@ func (v Video) FormatDuration() string {
 	return fmt.Sprintf("%d:%02d", minutes, seconds)
 }
 
+// SanitizeFilename cleans a string to make it safe for use as a filename across operating systems.
+func SanitizeFilename(name string) string {
+	// Replace illegal filename characters (\, /, :, *, ?, ", <, >, |, NUL, control chars) with '_'
+	invalidChars := regexp.MustCompile(`[\\/:*?"<>|\x00-\x1f]`)
+	sanitized := invalidChars.ReplaceAllString(name, "_")
+
+	// Collapse spaces and underscores surrounding invalid characters
+	multiSpaceUnderscore := regexp.MustCompile(`[ _]*_[ _]*`)
+	sanitized = multiSpaceUnderscore.ReplaceAllString(sanitized, "_")
+
+	// Trim leading and trailing spaces, dots, and underscores
+	sanitized = strings.Trim(sanitized, " ._")
+
+	// Limit length to 200 runes
+	runes := []rune(sanitized)
+	if len(runes) > 200 {
+		sanitized = strings.Trim(string(runes[:200]), " ._")
+	}
+
+	if sanitized == "" {
+		return "video"
+	}
+	return sanitized
+}
+
 // ResolvePath checks for yt-dlp in the local bin/ folder, and falls back to system PATH.
 func ResolvePath() (string, error) {
 	// 1. Check local bin/yt-dlp (with .exe on Windows)

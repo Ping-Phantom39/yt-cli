@@ -5,13 +5,17 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gopxl/beep"
 	"github.com/gopxl/beep/effects"
+	"github.com/gopxl/beep/flac"
 	"github.com/gopxl/beep/mp3"
 	"github.com/gopxl/beep/speaker"
+	"github.com/gopxl/beep/wav"
 )
 
 // PlayState represents the current state of the audio player.
@@ -100,17 +104,40 @@ func (p *Player) Play(filePath string) error {
 		return err
 	}
 
-	// Open the downloaded audio file
+	// Open the audio file
 	f, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to open audio file: %w", err)
 	}
 
-	// Decode the MP3 format
-	streamer, format, err := mp3.Decode(f)
+	ext := strings.ToLower(filepath.Ext(filePath))
+	var streamer beep.StreamSeeker
+	var format beep.Format
+
+	switch ext {
+	case ".wav":
+		streamer, format, err = wav.Decode(f)
+	case ".flac":
+		streamer, format, err = flac.Decode(f)
+	default:
+		// Try MP3 decode first, fallback to wav/flac if error
+		streamer, format, err = mp3.Decode(f)
+		if err != nil {
+			_, _ = f.Seek(0, 0)
+			if s, fmtWav, errWav := wav.Decode(f); errWav == nil {
+				streamer, format, err = s, fmtWav, nil
+			} else {
+				_, _ = f.Seek(0, 0)
+				if sFlac, fmtFlac, errFlac := flac.Decode(f); errFlac == nil {
+					streamer, format, err = sFlac, fmtFlac, nil
+				}
+			}
+		}
+	}
+
 	if err != nil {
 		f.Close()
-		return fmt.Errorf("failed to decode mp3: %w", err)
+		return fmt.Errorf("failed to decode audio file (%s): %w", ext, err)
 	}
 
 	p.streamer = streamer
