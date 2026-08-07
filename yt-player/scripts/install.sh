@@ -177,7 +177,7 @@ main() {
             ASSET_FILENAME=""
 
             if [ -n "$RELEASE_DATA" ]; then
-                MATCHED_URL=$(echo "$RELEASE_DATA" | grep -o '"browser_download_url": *"[^"]*"' | cut -d '"' -f 4 | grep -i "$OS" | grep -i -E "($ARCH|$ARCH_ALT)" | head -n 1 || true)
+                MATCHED_URL=$(echo "$RELEASE_DATA" | grep -o '"browser_download_url": *"[^"]*"' | cut -d '"' -f 4 | grep -i "$BINARY_NAME" | grep -i "$OS" | grep -i -E "($ARCH|$ARCH_ALT)" | head -n 1 || true)
                 if [ -n "$MATCHED_URL" ]; then
                     DOWNLOAD_URL="$MATCHED_URL"
                     ASSET_FILENAME="$(basename "$DOWNLOAD_URL")"
@@ -237,6 +237,14 @@ main() {
                 fi
             fi
         fi
+
+    if [ "$DOWNLOADED" -eq 0 ] || [ ! -f "$FOUND_BINARY" ]; then
+        RAW_BINARY_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${BINARY_REPO_PATH}"
+        log_info "Attempting direct raw download from repository (${RAW_BINARY_URL})..."
+        if $HTTP_GET "$RAW_BINARY_URL" > "$FOUND_BINARY" 2>/dev/null && [ -s "$FOUND_BINARY" ]; then
+            DOWNLOADED=1
+        fi
+    fi
 
     if [ "$DOWNLOADED" -eq 0 ] || [ ! -f "$FOUND_BINARY" ]; then
         log_error "Could not download ${BINARY_NAME} binary from repository (https://github.com/${REPO}/tree/${BRANCH}/${BINARY_REPO_PATH}) or release assets."
