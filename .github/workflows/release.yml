@@ -74,6 +74,10 @@ jobs:
           YTPLAYER_BIN="ytplayer-${{ matrix.os }}-${{ matrix.arch }}$EXT"
           YTMUSIC_BIN="ytmusic-${{ matrix.os }}-${{ matrix.arch }}$EXT"
 
+          # Include standalone unarchived binary files for direct curl download
+          cp "$YTPLAYER_BIN" "dist/$YTPLAYER_BIN"
+          cp "$YTMUSIC_BIN" "dist/$YTMUSIC_BIN"
+
           if [ "${{ matrix.os }}" = "windows" ]; then
             7z a "dist/ytplayer-${{ matrix.os }}-${{ matrix.arch }}.zip" "$YTPLAYER_BIN"
             7z a "dist/ytmusic-${{ matrix.os }}-${{ matrix.arch }}.zip" "$YTMUSIC_BIN"
