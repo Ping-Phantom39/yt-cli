@@ -19,9 +19,6 @@ jobs:
           - os: linux
             arch: amd64
             runner: ubuntu-latest
-          - os: linux
-            arch: arm64
-            runner: ubuntu-latest
           - os: darwin
             arch: amd64
             runner: macos-latest
@@ -44,14 +41,8 @@ jobs:
       - name: Install Linux Build Dependencies
         if: matrix.os == 'linux'
         run: |
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            sudo dpkg --add-architecture arm64
-            sudo apt-get update
-            sudo apt-get install -y gcc-aarch64-linux-gnu libasound2-dev:arm64
-          else
-            sudo apt-get update
-            sudo apt-get install -y libasound2-dev
-          fi
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
 
       - name: Build yt-player
         shell: bash
@@ -68,11 +59,7 @@ jobs:
           EXT=""
           if [ "${{ matrix.os }}" = "windows" ]; then EXT=".exe"; fi
           if [ "${{ matrix.os }}" = "linux" ]; then
-            if [ "${{ matrix.arch }}" = "arm64" ]; then
-              CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytmusic-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
-            else
-              CGO_ENABLED=1 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytmusic-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
-            fi
+            CGO_ENABLED=1 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytmusic-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
           else
             CGO_ENABLED=0 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytmusic-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
           fi
