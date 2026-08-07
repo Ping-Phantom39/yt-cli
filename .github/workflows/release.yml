@@ -44,8 +44,14 @@ jobs:
       - name: Install Linux Build Dependencies
         if: matrix.os == 'linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev gcc-aarch64-linux-gnu
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            sudo dpkg --add-architecture arm64
+            sudo apt-get update
+            sudo apt-get install -y gcc-aarch64-linux-gnu libasound2-dev:arm64
+          else
+            sudo apt-get update
+            sudo apt-get install -y libasound2-dev
+          fi
 
       - name: Build yt-player
         shell: bash
@@ -53,7 +59,7 @@ jobs:
           cd yt-player
           EXT=""
           if [ "${{ matrix.os }}" = "windows" ]; then EXT=".exe"; fi
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytplayer-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
+          CGO_ENABLED=0 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytplayer-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
 
       - name: Build yt-song
         shell: bash
@@ -61,7 +67,15 @@ jobs:
           cd yt-song
           EXT=""
           if [ "${{ matrix.os }}" = "windows" ]; then EXT=".exe"; fi
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytmusic-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
+          if [ "${{ matrix.os }}" = "linux" ]; then
+            if [ "${{ matrix.arch }}" = "arm64" ]; then
+              CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytmusic-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
+            else
+              CGO_ENABLED=1 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytmusic-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
+            fi
+          else
+            CGO_ENABLED=0 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -v -o "../ytmusic-${{ matrix.os }}-${{ matrix.arch }}$EXT" main.go
+          fi
 
       - name: Archive Binaries
         shell: bash
