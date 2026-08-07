@@ -42,3 +42,12 @@ func TestSanitizeFilename(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveFFmpegPath(t *testing.T) {
+	path, err := ResolveFFmpegPath()
+	if err != nil {
+		t.Logf("ResolveFFmpegPath returned error: %v", err)
+	} else {
+		t.Logf("ResolveFFmpegPath found ffmpeg at: %s", path)
+	}
+}

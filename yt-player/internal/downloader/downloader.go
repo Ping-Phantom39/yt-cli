@@ -167,6 +167,27 @@ func ResolvePath() (string, error) {
 	return "", fmt.Errorf("yt-dlp not found in ./bin or system PATH")
 }
 
+// ResolveFFmpegPath checks for ffmpeg in the local bin/ folder, and falls back to system PATH.
+func ResolveFFmpegPath() (string, error) {
+	ffmpegName := "ffmpeg"
+	if runtime.GOOS == "windows" {
+		ffmpegName = "ffmpeg.exe"
+	}
+	localPath := filepath.Join(".", "bin", ffmpegName)
+	if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
+		if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+			return localPath, nil
+		}
+	}
+
+	path, err := exec.LookPath("ffmpeg")
+	if err == nil {
+		return path, nil
+	}
+
+	return "", fmt.Errorf("ffmpeg not found in ./bin or system PATH")
+}
+
 // Search searches YouTube using yt-dlp.
 func Search(ctx context.Context, query string, limit int, cookiesFile, cookiesFromBrowser string) ([]Video, error) {
 	ytDlpPath, err := ResolvePath()
@@ -291,12 +312,17 @@ func Download(ctx context.Context, id string, outputPath string, progressChan ch
 
 	// Command arguments for downloading best video and audio merged into mp4
 	args := []string{
-		"-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+		"--no-playlist",
+		"-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
 		"--merge-output-format", "mp4",
 		"--newline",
 		"--js-runtimes", "node",
 		"--remote-components", "ejs:github",
-		"-o", outputTemplate,
+	}
+
+	ffmpegPath, ffmpegErr := ResolveFFmpegPath()
+	if ffmpegErr == nil {
+		args = append(args, "--ffmpeg-location", ffmpegPath)
 	}
 
 	if cookiesFile != "" {
@@ -306,7 +332,7 @@ func Download(ctx context.Context, id string, outputPath string, progressChan ch
 		args = append(args, "--cookies-from-browser", cookiesFromBrowser)
 	}
 
-	args = append(args, videoURL)
+	args = append(args, "-o", outputTemplate, videoURL)
 
 	cmd := exec.CommandContext(ctx, ytDlpPath, args...)
 
@@ -344,22 +370,78 @@ func Download(ctx context.Context, id string, outputPath string, progressChan ch
 		}
 	}
 
-	if err := cmd.Wait(); err != nil {
-		errDetail := strings.TrimSpace(stderrBuf.String())
-		if errDetail != "" {
-			for _, line := range strings.Split(errDetail, "\n") {
-				if strings.Contains(line, "ERROR") {
-					errDetail = strings.TrimSpace(line)
+	ytErr := cmd.Wait()
+
+	// Helper function to attempt fallback merging if yt-dlp left unmerged stream files
+	tryFallbackMerge := func() bool {
+		if ffmpegErr != nil {
+			return false
+		}
+
+		baseName := outputPath
+		if ext != "" {
+			baseName = outputPath[:len(outputPath)-len(ext)]
+		}
+		basePrefix := filepath.Base(baseName)
+
+		entries, err := os.ReadDir(destDir)
+		if err != nil {
+			return false
+		}
+
+		var videoFile, audioFile string
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if strings.HasPrefix(name, basePrefix) {
+				full := filepath.Join(destDir, name)
+				lower := strings.ToLower(name)
+				// Look for temporary format files such as Title.f399.mp4, Title.f140.m4a
+				if strings.Contains(lower, ".f") || strings.Contains(lower, ".temp.") {
+					if strings.HasSuffix(lower, ".m4a") || strings.HasSuffix(lower, ".aac") || strings.HasSuffix(lower, ".opus") || (strings.HasSuffix(lower, ".webm") && strings.Contains(lower, "audio")) {
+						audioFile = full
+					} else if strings.HasSuffix(lower, ".mp4") || strings.HasSuffix(lower, ".webm") || strings.HasSuffix(lower, ".mkv") {
+						videoFile = full
+					}
 				}
 			}
-			return "", fmt.Errorf("%s", errDetail)
 		}
-		return "", fmt.Errorf("failed to download: %w", err)
+
+		if videoFile != "" && audioFile != "" {
+			if progressChan != nil {
+				progressChan <- 99.0
+			}
+			cmdMerge := exec.CommandContext(ctx, ffmpegPath, "-y", "-i", videoFile, "-i", audioFile, "-c:v", "copy", "-c:a", "aac", "-strict", "experimental", outputPath)
+			if err := cmdMerge.Run(); err == nil {
+				if info, err := os.Stat(outputPath); err == nil && info.Size() > 0 {
+					_ = os.Remove(videoFile)
+					_ = os.Remove(audioFile)
+					return true
+				}
+			}
+		}
+		return false
 	}
 
-	// Verify the final output path exists
-	if _, err := os.Stat(outputPath); err != nil {
-		return "", fmt.Errorf("download completed but target file does not exist: %w", err)
+	// Verify target file exists, otherwise attempt fallback merge
+	if _, err := os.Stat(outputPath); err != nil || func() bool { info, e := os.Stat(outputPath); return e == nil && info.Size() == 0 }() {
+		if !tryFallbackMerge() {
+			if ytErr != nil {
+				errDetail := strings.TrimSpace(stderrBuf.String())
+				if errDetail != "" {
+					for _, line := range strings.Split(errDetail, "\n") {
+						if strings.Contains(line, "ERROR") {
+							errDetail = strings.TrimSpace(line)
+						}
+					}
+					return "", fmt.Errorf("%s", errDetail)
+				}
+				return "", fmt.Errorf("failed to download: %w", ytErr)
+			}
+			return "", fmt.Errorf("download completed but target file does not exist: %w", os.ErrNotExist)
+		}
 	}
 
 	if progressChan != nil {

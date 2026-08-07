@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -55,7 +56,7 @@ func CheckAll() []Dependency {
 		Description: "Media transcoder (needed by yt-dlp to merge video and audio streams)",
 		InstallInstructions: "sudo apt install -y ffmpeg (Debian/Ubuntu) or brew install ffmpeg (macOS)",
 	}
-	if p, err := exec.LookPath("ffmpeg"); err == nil {
+	if p, err := resolveFFmpeg(); err == nil {
 		ffmpegDep.Found = true
 		ffmpegDep.Path = p
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -144,4 +145,25 @@ func resolveYtDlp() (string, error) {
 	}
 
 	return "", fmt.Errorf("yt-dlp not found")
+}
+
+// Helper to find ffmpeg
+func resolveFFmpeg() (string, error) {
+	ffmpegName := "ffmpeg"
+	if runtime.GOOS == "windows" {
+		ffmpegName = "ffmpeg.exe"
+	}
+	localPath := filepath.Join(".", "bin", ffmpegName)
+	if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
+		if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+			return localPath, nil
+		}
+	}
+
+	path, err := exec.LookPath("ffmpeg")
+	if err == nil {
+		return path, nil
+	}
+
+	return "", fmt.Errorf("ffmpeg not found")
 }
