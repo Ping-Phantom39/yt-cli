@@ -143,7 +143,7 @@ func ScanLocalVideos(dirs ...string) ([]Video, error) {
 	return videos, nil
 }
 
-// ResolvePath checks for yt-dlp in the local bin/ folder, and falls back to system PATH.
+// ResolvePath checks for yt-dlp in local bin/, executable dir, and falls back to system PATH.
 func ResolvePath() (string, error) {
 	// 1. Check local bin/yt-dlp (with .exe on Windows)
 	ytDlpName := "yt-dlp"
@@ -158,7 +158,24 @@ func ResolvePath() (string, error) {
 		}
 	}
 
-	// 2. Check system PATH
+	// 2. Check next to running executable
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		exeAdjacent := filepath.Join(exeDir, ytDlpName)
+		if info, err := os.Stat(exeAdjacent); err == nil && !info.IsDir() {
+			if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+				return exeAdjacent, nil
+			}
+		}
+		exeBin := filepath.Join(exeDir, "bin", ytDlpName)
+		if info, err := os.Stat(exeBin); err == nil && !info.IsDir() {
+			if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+				return exeBin, nil
+			}
+		}
+	}
+
+	// 3. Check system PATH
 	path, err := exec.LookPath("yt-dlp")
 	if err == nil {
 		return path, nil
@@ -167,7 +184,7 @@ func ResolvePath() (string, error) {
 	return "", fmt.Errorf("yt-dlp not found in ./bin or system PATH")
 }
 
-// ResolveFFmpegPath checks for ffmpeg in the local bin/ folder, and falls back to system PATH.
+// ResolveFFmpegPath checks for ffmpeg in the local bin/ folder, executable dir, and falls back to system PATH.
 func ResolveFFmpegPath() (string, error) {
 	ffmpegName := "ffmpeg"
 	if runtime.GOOS == "windows" {
@@ -177,6 +194,23 @@ func ResolveFFmpegPath() (string, error) {
 	if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
 		if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
 			return localPath, nil
+		}
+	}
+
+	// Check next to running executable
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		exeAdjacent := filepath.Join(exeDir, ffmpegName)
+		if info, err := os.Stat(exeAdjacent); err == nil && !info.IsDir() {
+			if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+				return exeAdjacent, nil
+			}
+		}
+		exeBin := filepath.Join(exeDir, "bin", ffmpegName)
+		if info, err := os.Stat(exeBin); err == nil && !info.IsDir() {
+			if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+				return exeBin, nil
+			}
 		}
 	}
 
@@ -207,8 +241,14 @@ func Search(ctx context.Context, query string, limit int, cookiesFile, cookiesFr
 		"--dump-json",
 		"--flat-playlist",
 		"--no-warnings",
-		"--js-runtimes", "node",
+		"--extractor-args", "youtube:player_client=android,ios,tv,web",
 		"--remote-components", "ejs:github",
+	}
+
+	if _, err := exec.LookPath("node"); err == nil {
+		args = append(args, "--js-runtimes", "node")
+	} else if _, err := exec.LookPath("deno"); err == nil {
+		args = append(args, "--js-runtimes", "deno")
 	}
 
 	if cookiesFile != "" {
@@ -313,11 +353,17 @@ func Download(ctx context.Context, id string, outputPath string, progressChan ch
 	// Command arguments for downloading best video and audio merged into mp4
 	args := []string{
 		"--no-playlist",
-		"-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
+		"--extractor-args", "youtube:player_client=android,ios,tv,web",
+		"-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best/18",
 		"--merge-output-format", "mp4",
 		"--newline",
-		"--js-runtimes", "node",
 		"--remote-components", "ejs:github",
+	}
+
+	if _, err := exec.LookPath("node"); err == nil {
+		args = append(args, "--js-runtimes", "node")
+	} else if _, err := exec.LookPath("deno"); err == nil {
+		args = append(args, "--js-runtimes", "deno")
 	}
 
 	ffmpegPath, ffmpegErr := ResolveFFmpegPath()

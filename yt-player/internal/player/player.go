@@ -49,6 +49,16 @@ func (p *Player) BuildMpvCmd(target string, cookiesFile, cookiesFromBrowser stri
 		}
 
 		var ytdlOpts []string
+		// Use android player client to bypass 403 Forbidden / 429 Too Many Requests / SABR format errors on YouTube
+		ytdlOpts = append(ytdlOpts, "extractor-args=youtube:player_client=android")
+
+		// Add JS runtime if node or deno is available on the system
+		if _, err := exec.LookPath("node"); err == nil {
+			ytdlOpts = append(ytdlOpts, "js-runtimes=node")
+		} else if _, err := exec.LookPath("deno"); err == nil {
+			ytdlOpts = append(ytdlOpts, "js-runtimes=deno")
+		}
+
 		if cookiesFile != "" {
 			ytdlOpts = append(ytdlOpts, "cookies="+cookiesFile)
 		}

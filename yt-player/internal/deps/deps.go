@@ -2,13 +2,10 @@ package deps
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
+	"ytplayer/internal/downloader"
 )
 
 // Dependency represents a system or binary dependency
@@ -33,7 +30,7 @@ func CheckAll() []Dependency {
 		Description: "YouTube media downloader and metadata scraper",
 		InstallInstructions: "Download from https://github.com/yt-dlp/yt-dlp or place in ./bin/yt-dlp",
 	}
-	ytDlpPath, err := resolveYtDlp()
+	ytDlpPath, err := downloader.ResolvePath()
 	if err == nil {
 		ytDlpDep.Found = true
 		ytDlpDep.Path = ytDlpPath
@@ -56,7 +53,7 @@ func CheckAll() []Dependency {
 		Description: "Media transcoder (needed by yt-dlp to merge video and audio streams)",
 		InstallInstructions: "sudo apt install -y ffmpeg (Debian/Ubuntu) or brew install ffmpeg (macOS)",
 	}
-	if p, err := resolveFFmpeg(); err == nil {
+	if p, err := downloader.ResolveFFmpegPath(); err == nil {
 		ffmpegDep.Found = true
 		ffmpegDep.Path = p
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -126,44 +123,4 @@ func CheckAll() []Dependency {
 	results = append(results, nodeDep)
 
 	return results
-}
-
-// Helper to find yt-dlp
-func resolveYtDlp() (string, error) {
-	// 1. Check local bin/yt-dlp
-	localPath := filepath.Join(".", "bin", "yt-dlp")
-	if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
-		if info.Mode()&0111 != 0 {
-			return localPath, nil
-		}
-	}
-
-	// 2. Check system PATH
-	path, err := exec.LookPath("yt-dlp")
-	if err == nil {
-		return path, nil
-	}
-
-	return "", fmt.Errorf("yt-dlp not found")
-}
-
-// Helper to find ffmpeg
-func resolveFFmpeg() (string, error) {
-	ffmpegName := "ffmpeg"
-	if runtime.GOOS == "windows" {
-		ffmpegName = "ffmpeg.exe"
-	}
-	localPath := filepath.Join(".", "bin", ffmpegName)
-	if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
-		if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
-			return localPath, nil
-		}
-	}
-
-	path, err := exec.LookPath("ffmpeg")
-	if err == nil {
-		return path, nil
-	}
-
-	return "", fmt.Errorf("ffmpeg not found")
 }
