@@ -1,8 +1,9 @@
-# Bug Report & Fix Documentation: YouTube Stream 429 & Format Unavailable Error
+# Bug Report & Fix Documentation: YouTube Stream 429 & Video Quality Selection
 
 ## 1. Problem Overview
 
-When running `ytplayer` to stream videos such as `lAbWm-DIB-E` or `fCkeLBGSINs`, playback failed with the following error output:
+### A. Initial Issue: 429 Too Many Requests / Format Unavailable
+When running `ytplayer` to stream YouTube videos, playback failed with the following error output:
 
 ```text
 [ytdl_hook] ERROR: [youtube] lAbWm-DIB-E: Requested format is not available. Use --list-formats for a list of available formats
@@ -12,58 +13,70 @@ Failed to open https://www.youtube.com/watch?v=lAbWm-DIB-E.
 Exiting... (Errors when loading file)
 ```
 
+### B. Secondary Issue: Low Quality (360p) Playback
+When defaulting solely to the `android` player client, YouTube only returned legacy single-stream formats (format 18 = 360p H.264/AAC), resulting in low-resolution video playback.
+
 ---
 
 ## 2. Root Cause Analysis
 
-### A. YouTube Bot Verification & SABR Stream Changes
-YouTube introduced strict server-side changes targeting the default `web` and `mweb` client requests:
-- **Proof-of-Origin (PO) Token Requirement**: Requests coming from web/mweb endpoints without a valid GVS PO token or solver are skipped or rejected with `403 Forbidden` / `429 Too Many Requests`.
-- **SABR Streaming Protocol**: Standard web formats are restricted to streaming experiments that return no downloadable stream URLs, leaving only image storyboards (`sb0`, `sb1`, `sb2`, `sb3`).
-
-### B. Missing `ytdl-raw-options` in MPV Hook
-In `internal/player/player.go`, when `ytplayer` passed a remote YouTube URL to `mpv`, `mpv`'s internal `ytdl_hook` executed `yt-dlp` with default options (web client):
-- Because no extractor client or JavaScript runtime options were forwarded to `mpv`, `yt-dlp` failed format extraction.
-- When `yt-dlp` failed, `mpv` attempted to open the raw YouTube webpage URL directly using `ffmpeg`, causing `[ffmpeg] https: HTTP error 429 Too Many Requests`.
-
-### C. Outdated Local `bin/yt-dlp`
-The project's local `./bin/yt-dlp` was an older build (`2026.07.04`), whereas YouTube API extraction fixes require the latest `yt-dlp` release (`2026.08.19`+).
+1. **YouTube SABR & PO Token Enforcement**: YouTube restricts default `web` and `mweb` client requests, requiring GVS Proof-of-Origin (PO) tokens and SABR decoders. Requests without them return HTTP 429/403 or only storyboard images.
+2. **Android Client Format Limitations**: While the basic `android` client bypasses bot challenges, it only serves format 18 (360p).
+3. **High-Definition Stream Unlocking via `visionos` Client**: The `visionos` (Apple Vision Pro) client delivers Full HD (1080p), 1440p, 4K (2160p), and high-fidelity Opus (48kHz) / AAC (128kbps) streams without requiring PO tokens or triggering 429/403 blocks.
+4. **Missing MPV Format Selectors**: `mpv` required `--ytdl-format="bestvideo+bestaudio/best"` and proper `--ytdl-raw-options` to request the highest resolution video track merged with the highest quality audio track.
 
 ---
 
-## 3. Implemented Fixes
+## 3. Implemented Solutions & Interactive Quality Selection
 
-### 1. MPV Playback Configuration (`internal/player/player.go`)
-- **Android Player Client Routing**: Added `extractor-args=youtube:player_client=android` to `mpv`'s `--ytdl-raw-options`. The Android client delivers direct HTTPS MP4/AAC streams without requiring PO tokens or triggering 429 blocks.
-- **Dynamic JS Runtime Detection**: Automatically detects if `node` or `deno` is available on the system and attaches `js-runtimes=node` (or `deno`) into `--ytdl-raw-options`.
+### 1. Interactive Video Quality Selector (TUI)
+Users can change playback quality live in the interface:
+- **`[v]` or `[Tab]`**: Cycles through video quality presets in real-time.
+- **`[1] - [6]`**: Quick jump to a specific preset:
+  - `[1]`: **Best / 4K** (Max resolution available - 4K/1440p/1080p)
+  - `[2]`: **1080p FHD** (Full High Definition)
+  - `[3]`: **720p HD** (High Definition)
+  - `[4]`: **480p SD** (Standard Definition)
+  - `[5]`: **360p Saver** (Data Saver)
+  - `[6]`: **Audio Only 🎵** (Music & Podcasts - zero video bandwidth)
+- **Visual Cyberpunk Badge**: Displays active quality in the header (e.g. `[ ⚡ QUALITY: 1080p FHD [v] ]`).
+- **Player Status Panel**: Shows currently selected quality, resolution description, and shortcuts.
 
-### 2. Search & Download Pipeline (`internal/downloader/downloader.go`)
-- **Multi-Client Fallback**: Added `--extractor-args "youtube:player_client=android,ios,tv,web"` to both `Search()` and `Download()` to maximize format compatibility.
-- **Format Fallback**: Added fallback format `/18` to the format selector string (`bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best/18`).
-- **Dynamic JS Runtime**: Added automatic detection for `node`/`deno` during search and download operations.
-- **Binary Resolution**: Enhanced `ResolvePath()` and `ResolveFFmpegPath()` to check:
-  1. Current working directory (`./bin`)
-  2. Directory adjacent to the running executable (`<exe_dir>/yt-dlp` or `<exe_dir>/bin/yt-dlp`)
-  3. System `PATH` (`exec.LookPath`)
+### 2. High-Definition Streaming in `mpv` (`internal/player/player.go`)
+- **`visionos` Client**: Configured `--ytdl-raw-options="extractor-args=youtube:player_client=visionos"` to unlock HD and 4K streams.
+- **Dynamic Quality Formats**:
+  - `audio`: `--ytdl-format=bestaudio/best --no-video`
+  - `1080`: `--ytdl-format=bestvideo[height<=1080]+bestaudio/best[height<=1080]/best`
+  - `720`: `--ytdl-format=bestvideo[height<=720]+bestaudio/best[height<=720]/best`
+  - `480`: `--ytdl-format=bestvideo[height<=480]+bestaudio/best[height<=480]/best`
+  - `360`: `--ytdl-format=bestvideo[height<=360]+bestaudio/best[height<=360]/best/18`
+  - `best`: `--ytdl-format=bestvideo+bestaudio/best`
 
-### 3. Dependency Checker (`internal/deps/deps.go`)
-- Refactored `deps.CheckAll()` to use the unified resolution methods (`downloader.ResolvePath()` and `downloader.ResolveFFmpegPath()`).
+### 3. CLI Quality Flag (`cmd/root.go`)
+- Added `-q, --quality` flag allowing users to launch the player with a custom default quality:
+  ```bash
+  ytplayer "query"                # Plays at the best quality available (1080p / 4K)
+  ytplayer -q 1080 "query"        # Max 1080p Full HD
+  ytplayer -q 720 "query"         # Max 720p HD
+  ytplayer -q audio "query"       # Audio only mode (music player)
+  ```
 
-### 4. Binary Update
-- Updated `./bin/yt-dlp` to the latest release (`2026.08.19`).
-- Recompiled and installed the new `ytplayer` binary to `~/.local/bin/ytplayer`.
+### 4. Quality-Aware Downloader (`internal/downloader/downloader.go`)
+- Updated `Download()` to download video/audio matching the user's selected quality preset.
+- Utilizes `visionos,android_creator,tv_embedded,android,ios,tv,web` clients for multi-resolution downloads.
 
 ---
 
 ## 4. Modified Files Summary
 
-| File | Changes |
+| File | Summary of Changes |
 | :--- | :--- |
-| [`internal/player/player.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/player/player.go) | Configured `--ytdl-raw-options` with Android client and dynamic JS runtimes. |
-| [`internal/downloader/downloader.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/downloader/downloader.go) | Added multi-client extractor args, format `/18` fallback, and executable-relative binary path resolution. |
-| [`internal/deps/deps.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/deps/deps.go) | Unified dependency path resolution with `downloader`. |
-| [`internal/player/player_test.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/player/player_test.go) | Added unit tests verifying generated `mpv` command-line arguments. |
-| `bin/yt-dlp` | Upgraded binary to version `2026.08.19`. |
+| [`internal/player/player.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/player/player.go) | Configured `QualityPresets`, `QualityOption`, format selectors, and `visionos` options. |
+| [`internal/ui/ui.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/ui/ui.go) | Added interactive quality cycling (`[v]`/`[Tab]`), direct numeric shortcuts (`[1-6]`), and quality badges. |
+| [`cmd/root.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/cmd/root.go) | Added `-q, --quality` flag for user-selectable initial video resolution. |
+| [`internal/downloader/downloader.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/downloader/downloader.go) | Enabled quality-aware downloads and multi-client resolution extraction. |
+| [`internal/player/player_test.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/player/player_test.go) | Added unit tests covering all quality options (Best, 720p, Audio Only). |
+| [`README.md`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/README.md) | Documented quality selector keybindings and CLI flag. |
 
 ---
 
@@ -75,15 +88,7 @@ The project's local `./bin/yt-dlp` was an older build (`2026.07.04`), whereas Yo
    # ok ytplayer/internal/downloader
    # ok ytplayer/internal/player
    ```
-2. **Dependency Scanner**:
-   ```bash
-   ytplayer --check
-   # [🟢 OK] yt-dlp (v2026.08.19)
-   # [🟢 OK] ffmpeg (v7.1.1)
-   # [🟢 OK] mpv (v0.40.0)
-   # [🟢 OK] Node.js (v20.18.1)
-   ```
-3. **Playback Verification**:
-   - Tested stream extraction on `lAbWm-DIB-E`: Successful (Exit Code 0).
-   - Tested stream extraction on `fCkeLBGSINs`: Successful (Exit Code 0).
-   - Tested search scraping with query metadata: Successful.
+2. **Stream Resolution Verification**:
+   - `4K / Best`: Verified streaming in **3840x2160 AV1 / 1920x1080 VP9** + **Opus 48kHz** (Exit Code 0).
+   - `720p HD`: Verified streaming in **1280x720 AV1/VP9** (Exit Code 0).
+   - `Audio Only`: Verified streaming with `--no-video` (Exit Code 0).

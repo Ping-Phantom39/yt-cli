@@ -17,6 +17,7 @@ var (
 	cookiesFile        string
 	cookiesFromBrowser string
 	videoOutput        string
+	quality            string
 	checkDepsFlag      bool
 	startLocalMode     bool
 )
@@ -59,6 +60,9 @@ Examples:
 
 		// Setup video output override
 		m.SetVideoOutput(videoOutput)
+
+		// Setup stream quality setting
+		m.SetQuality(quality)
 
 		// Setup boot search query if provided as arguments
 		if len(args) > 0 {
@@ -143,6 +147,7 @@ func init() {
 	rootCmd.Flags().StringVar(&cookiesFile, "cookies", "", "Path to cookies file")
 	rootCmd.Flags().StringVar(&cookiesFromBrowser, "cookies-from-browser", "", "Load cookies from a specific browser (e.g. chrome, firefox, edge, brave)")
 	rootCmd.Flags().StringVar(&videoOutput, "vo", "", "Force custom mpv video output driver (e.g. tct, sixel, kitty, gpu)")
+	rootCmd.Flags().StringVarP(&quality, "quality", "q", "best", "Max playback quality (e.g. best, 1080, 720, 480, 360)")
 	rootCmd.Flags().BoolVarP(&startLocalMode, "local", "m", false, "Start in Local Offline Video mode")
 	rootCmd.Flags().BoolVar(&checkDepsFlag, "check", false, "Verify that all system dependencies are installed correctly")
 }

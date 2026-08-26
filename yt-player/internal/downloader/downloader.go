@@ -241,7 +241,7 @@ func Search(ctx context.Context, query string, limit int, cookiesFile, cookiesFr
 		"--dump-json",
 		"--flat-playlist",
 		"--no-warnings",
-		"--extractor-args", "youtube:player_client=android,ios,tv,web",
+		"--extractor-args", "youtube:player_client=visionos,android_creator,tv_embedded,android,ios,tv,web",
 		"--remote-components", "ejs:github",
 	}
 
@@ -312,10 +312,10 @@ func Search(ctx context.Context, query string, limit int, cookiesFile, cookiesFr
 	return videos, nil
 }
 
-// Download downloads a YouTube video as an MP4 file.
+// Download downloads a YouTube video as an MP4 file with the specified quality.
 // progressChan receives progress percentage (0.0 to 100.0).
 // Returns the absolute path to the downloaded MP4 file.
-func Download(ctx context.Context, id string, outputPath string, progressChan chan<- float64, cookiesFile, cookiesFromBrowser string) (string, error) {
+func Download(ctx context.Context, id string, outputPath string, quality string, progressChan chan<- float64, cookiesFile, cookiesFromBrowser string) (string, error) {
 	ytDlpPath, err := ResolvePath()
 	if err != nil {
 		return "", err
@@ -350,11 +350,32 @@ func Download(ctx context.Context, id string, outputPath string, progressChan ch
 		outputTemplate = outputPath + ".%(ext)s"
 	}
 
-	// Command arguments for downloading best video and audio merged into mp4
+	// Select download format string based on requested quality
+	var formatSelector string
+	switch quality {
+	case "audio":
+		formatSelector = "bestaudio/best"
+	case "1080":
+		formatSelector = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
+	case "720":
+		formatSelector = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best"
+	case "480":
+		formatSelector = "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best"
+	case "360":
+		formatSelector = "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]/best/18"
+	default:
+		if quality != "" && quality != "best" && quality != "max" {
+			formatSelector = fmt.Sprintf("bestvideo[height<=%s][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=%s]+bestaudio/best[height<=%s]/best", quality, quality, quality)
+		} else {
+			formatSelector = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best/18"
+		}
+	}
+
+	// Command arguments for downloading video and audio merged into mp4
 	args := []string{
 		"--no-playlist",
-		"--extractor-args", "youtube:player_client=android,ios,tv,web",
-		"-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best/18",
+		"--extractor-args", "youtube:player_client=visionos,android_creator,tv_embedded,android,ios,tv,web",
+		"-f", formatSelector,
 		"--merge-output-format", "mp4",
 		"--newline",
 		"--remote-components", "ejs:github",

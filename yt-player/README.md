@@ -79,6 +79,7 @@ Scan and check system dependencies:
 ### Options and Flags
 - `-m, --local`: Start directly in Local Offline Video mode.
 - `-l, --limit int`: Number of search results to fetch (default `15`).
+- `-q, --quality string`: Max playback quality (e.g. `best`, `1080`, `720`, `480`, `360`) (default `best`).
 - `--cookies string`: Path to cookies file (automatically detects `cookies.txt` in current directory if present).
 - `--cookies-from-browser string`: Load cookies from a specific browser (e.g., `chrome`, `firefox`, `edge`, `brave`).
 - `--vo string`: Force a custom `mpv` video output driver (e.g. `tct`, `sixel`, `kitty`, `gpu`).
@@ -89,8 +90,16 @@ Scan and check system dependencies:
 ## Keybindings (TUI)
 - `[/]` - Focus the search bar to enter a new query or filter local videos.
 - `[m]` - Toggle between **Online YouTube Mode** and **Local Offline Video Mode**.
-- `[Enter]` - Stream and play the selected video instantly using `mpv` (or play local video file).
-- `[d]` - Download the video permanently to `./downloads/` folder as `<Video_Title>.mp4`.
+- `[v]` or `[Tab]` - Cycle through video quality presets (**Best/4K** ➔ **1080p FHD** ➔ **720p HD** ➔ **480p SD** ➔ **360p Saver** ➔ **Audio Only 🎵**).
+- `[1] - [6]` - Quick jump to specific quality preset:
+  - `[1]`: Best / 4K (Ultra HD)
+  - `[2]`: 1080p (Full HD)
+  - `[3]`: 720p (High Definition)
+  - `[4]`: 480p (Standard Definition)
+  - `[5]`: 360p (Data Saver)
+  - `[6]`: Audio Only (Music & Podcasts)
+- `[Enter]` - Stream and play the selected video instantly using `mpv` with the chosen quality.
+- `[d]` - Download the video permanently to `./downloads/` folder with the chosen quality.
 - `[Esc]` - Blur/unfocus the search bar.
 - `[q]` or `[Ctrl+C]` - Quit the application.
 

@@ -120,6 +120,9 @@ type Model struct {
 	// Player config
 	player *player.Player
 
+	// Video Quality Preset State
+	selectedQualityIndex int
+
 	// Local Video state
 	isLocalMode bool
 	localVideos []downloader.Video
@@ -142,8 +145,9 @@ func NewModel() *Model {
 	p := player.NewPlayer()
 
 	return &Model{
-		searchInput: ti,
-		player:      p,
+		searchInput:          ti,
+		player:               p,
+		selectedQualityIndex: 0, // Default to Best / 4K
 	}
 }
 
@@ -164,6 +168,33 @@ func (m *Model) SetCookies(cookiesFile, cookiesFromBrowser string) {
 // SetVideoOutput overrides the video output driver
 func (m *Model) SetVideoOutput(vo string) {
 	m.player.VideoOutput = vo
+}
+
+// SetQuality sets the video stream quality limit (e.g. 1080, 720, 480, best, audio)
+func (m *Model) SetQuality(q string) {
+	lower := strings.ToLower(strings.TrimSpace(q))
+	for idx, preset := range player.QualityPresets {
+		if preset.ID == lower || strings.HasPrefix(lower, preset.ID) {
+			m.selectedQualityIndex = idx
+			m.player.Quality = preset.ID
+			return
+		}
+	}
+	m.player.Quality = q
+}
+
+// CycleQuality cycles forward to the next quality preset
+func (m *Model) CycleQuality() {
+	m.selectedQualityIndex = (m.selectedQualityIndex + 1) % len(player.QualityPresets)
+	m.player.Quality = player.QualityPresets[m.selectedQualityIndex].ID
+}
+
+// SetQualityByIndex sets the quality preset by its numeric index
+func (m *Model) SetQualityByIndex(idx int) {
+	if idx >= 0 && idx < len(player.QualityPresets) {
+		m.selectedQualityIndex = idx
+		m.player.Quality = player.QualityPresets[idx].ID
+	}
 }
 
 // SetLocalMode configures whether the TUI starts in Local Offline mode or Online YouTube mode.
@@ -223,13 +254,13 @@ func (m *Model) searchCmd(ctx context.Context, query string) tea.Cmd {
 	}
 }
 
-func (m *Model) downloadCmd(ctx context.Context, id string, outputPath string, progressChan chan float64) tea.Cmd {
+func (m *Model) downloadCmd(ctx context.Context, id string, outputPath string, quality string, progressChan chan float64) tea.Cmd {
 	return func() tea.Msg {
 		defer func() {
 			recover() // Ignore panic if already closed
 		}()
 
-		filePath, err := downloader.Download(ctx, id, outputPath, progressChan, m.CookiesFile, m.CookiesFromBrowser)
+		filePath, err := downloader.Download(ctx, id, outputPath, quality, progressChan, m.CookiesFile, m.CookiesFromBrowser)
 		if err != nil {
 			return downloadErrorMsg(err)
 		}
@@ -341,6 +372,34 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 
+			case "v", "tab":
+				m.CycleQuality()
+				return m, nil
+
+			case "1":
+				m.SetQualityByIndex(0)
+				return m, nil
+
+			case "2":
+				m.SetQualityByIndex(1)
+				return m, nil
+
+			case "3":
+				m.SetQualityByIndex(2)
+				return m, nil
+
+			case "4":
+				m.SetQualityByIndex(3)
+				return m, nil
+
+			case "5":
+				m.SetQualityByIndex(4)
+				return m, nil
+
+			case "6":
+				m.SetQualityByIndex(5)
+				return m, nil
+
 			case "enter":
 				if len(m.results) > 0 && m.cursor < len(m.results) {
 					m.playbackErr = nil
@@ -398,7 +457,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					outputPath := filepath.Join(".", "downloads", filename)
 
 					return m, tea.Batch(
-						m.downloadCmd(ctx, video.ID, outputPath, m.progressChan),
+						m.downloadCmd(ctx, video.ID, outputPath, m.player.Quality, m.progressChan),
 						waitForProgress(m.progressChan),
 					)
 				}
@@ -500,14 +559,29 @@ func (m *Model) View() string {
 	s.WriteString(lipgloss.NewStyle().Foreground(cyanColor).Align(lipgloss.Center).Width(m.width).Render(banner))
 	s.WriteString("\n")
 
-	// Mode Badge
+	// Mode & Quality Badges
 	var modeBadge string
 	if m.isLocalMode {
 		modeBadge = lipgloss.NewStyle().Background(greenColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("📁 LOCAL OFFLINE VIDEOS")
 	} else {
-		modeBadge = lipgloss.NewStyle().Background(purpleColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("🌐 ONLINE YOUTUBE VIDEOS")
+		modeBadge = lipgloss.NewStyle().Background(purpleColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("🌐 ONLINE YOUTUBE")
 	}
-	s.WriteString(lipgloss.NewStyle().Align(lipgloss.Center).Width(m.width).Render(modeBadge))
+
+	qualityPreset := player.QualityPresets[m.selectedQualityIndex]
+	var qColor lipgloss.Color
+	switch qualityPreset.ID {
+	case "best", "1080":
+		qColor = cyanColor
+	case "720", "480":
+		qColor = yellowColor
+	case "audio":
+		qColor = greenColor
+	default:
+		qColor = grayColor
+	}
+	qualityBadge := lipgloss.NewStyle().Background(qColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("⚡ QUALITY: " + qualityPreset.Label + " [v]")
+
+	s.WriteString(lipgloss.NewStyle().Align(lipgloss.Center).Width(m.width).Render(fmt.Sprintf("%s   %s", modeBadge, qualityBadge)))
 	s.WriteString("\n\n")
 
 	// Search bar view
@@ -614,9 +688,10 @@ func (m *Model) View() string {
 			progBarWidth = 10
 		}
 		
-		timelineStr := fmt.Sprintf("Progress: [%s] %5.1f%%  │  Merging Streams...",
+		timelineStr := fmt.Sprintf("Progress: [%s] %5.1f%%  │  Merging Streams (%s)...",
 			renderCustomProgressBar(progBarWidth, m.downloadPercent/100.0, pinkColor),
 			m.downloadPercent,
+			qualityPreset.Label,
 		)
 		playerContent.WriteString(timelineStr)
 	} else if m.downloadErr != nil {
@@ -638,7 +713,12 @@ func (m *Model) View() string {
 		badge := lipgloss.NewStyle().Background(grayColor).Foreground(darkGrayBg).Bold(true).Padding(0, 1).Render("■ READY")
 		titleStyled := lipgloss.NewStyle().Foreground(grayColor).Render("Select a video from the list")
 		playerContent.WriteString(fmt.Sprintf("%s  %s\n\n", badge, titleStyled))
-		playerContent.WriteString(lipgloss.NewStyle().Foreground(grayColor).Render("Press Enter to Stream/Play in mpv. Press 'd' to save to ./downloads/."))
+		qualityInfo := fmt.Sprintf("Quality: %s (%s)  │  [v/Tab] Cycle  [1-6] Quick Select: 1:4K 2:1080 3:720 4:480 5:360 6:Audio",
+			greenStatusStyle.Render(qualityPreset.Label),
+			qualityPreset.Description,
+		)
+		playerContent.WriteString(qualityInfo + "\n")
+		playerContent.WriteString(lipgloss.NewStyle().Foreground(grayColor).Render("Press Enter to Stream. Press 'd' to download. Press [v] or [1-6] to change quality."))
 	}
 
 	s.WriteString(playerBoxStyle.Width(m.width - 4).Render(playerContent.String()))
@@ -649,12 +729,13 @@ func (m *Model) View() string {
 	descStyle := lipgloss.NewStyle().Foreground(grayColor)
 	
 	helpStr := fmt.Sprintf(
-		" %s %s   %s %s   %s %s   %s %s   %s %s   %s %s",
+		" %s %s   %s %s   %s %s   %s %s   %s %s   %s %s   %s %s",
 		keyStyle.Render("[/]"), descStyle.Render("Search"),
-		keyStyle.Render("[m]"), descStyle.Render("Mode (Online/Local)"),
-		keyStyle.Render("[Enter]"), descStyle.Render("Play/Stream (mpv)"),
-		keyStyle.Render("[d]"), descStyle.Render("Download (MP4)"),
-		keyStyle.Render("[Esc]"), descStyle.Render("Blur input"),
+		keyStyle.Render("[m]"), descStyle.Render("Mode"),
+		keyStyle.Render("[v/1-6]"), descStyle.Render("Quality"),
+		keyStyle.Render("[Enter]"), descStyle.Render("Play/Stream"),
+		keyStyle.Render("[d]"), descStyle.Render("Download"),
+		keyStyle.Render("[Esc]"), descStyle.Render("Blur"),
 		keyStyle.Render("[q]"), descStyle.Render("Quit"),
 	)
 	s.WriteString(lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(helpStr))
