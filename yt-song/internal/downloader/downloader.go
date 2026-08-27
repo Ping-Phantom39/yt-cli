@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -141,24 +142,84 @@ func SanitizeFilename(name string) string {
 	return sanitized
 }
 
-// ResolvePath checks for yt-dlp in the local bin/ folder, and falls back to system PATH.
+// ResolvePath checks for yt-dlp in the local bin/ folder, executable dir, and falls back to system PATH.
 func ResolvePath() (string, error) {
+	ytDlpName := "yt-dlp"
+	if runtime.GOOS == "windows" {
+		ytDlpName = "yt-dlp.exe"
+	}
+
 	// 1. Check local bin/yt-dlp
-	localPath := filepath.Join(".", "bin", "yt-dlp")
+	localPath := filepath.Join(".", "bin", ytDlpName)
 	if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
-		// Make sure it is executable
-		if info.Mode()&0111 != 0 {
+		// Make sure it is executable on unix
+		if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
 			return localPath, nil
 		}
 	}
 
-	// 2. Check system PATH
+	// 2. Check next to running executable
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		exeAdjacent := filepath.Join(exeDir, ytDlpName)
+		if info, err := os.Stat(exeAdjacent); err == nil && !info.IsDir() {
+			if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+				return exeAdjacent, nil
+			}
+		}
+		exeBin := filepath.Join(exeDir, "bin", ytDlpName)
+		if info, err := os.Stat(exeBin); err == nil && !info.IsDir() {
+			if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+				return exeBin, nil
+			}
+		}
+	}
+
+	// 3. Check system PATH
 	path, err := exec.LookPath("yt-dlp")
 	if err == nil {
 		return path, nil
 	}
 
 	return "", fmt.Errorf("yt-dlp not found in ./bin or system PATH")
+}
+
+// ResolveFFmpegPath checks for ffmpeg in the local bin/ folder, executable dir, and falls back to system PATH.
+func ResolveFFmpegPath() (string, error) {
+	ffmpegName := "ffmpeg"
+	if runtime.GOOS == "windows" {
+		ffmpegName = "ffmpeg.exe"
+	}
+	localPath := filepath.Join(".", "bin", ffmpegName)
+	if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
+		if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+			return localPath, nil
+		}
+	}
+
+	// Check next to running executable
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		exeAdjacent := filepath.Join(exeDir, ffmpegName)
+		if info, err := os.Stat(exeAdjacent); err == nil && !info.IsDir() {
+			if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+				return exeAdjacent, nil
+			}
+		}
+		exeBin := filepath.Join(exeDir, "bin", ffmpegName)
+		if info, err := os.Stat(exeBin); err == nil && !info.IsDir() {
+			if runtime.GOOS == "windows" || info.Mode()&0111 != 0 {
+				return exeBin, nil
+			}
+		}
+	}
+
+	path, err := exec.LookPath("ffmpeg")
+	if err == nil {
+		return path, nil
+	}
+
+	return "", fmt.Errorf("ffmpeg not found in ./bin or system PATH")
 }
 
 // Search searches YouTube using yt-dlp.
@@ -180,8 +241,14 @@ func Search(ctx context.Context, query string, limit int, cookiesFile, cookiesFr
 		"--dump-json",
 		"--flat-playlist",
 		"--no-warnings",
-		"--js-runtimes", "node",
+		"--extractor-args", "youtube:player_client=visionos,web_creator,web,android,ios",
 		"--remote-components", "ejs:github",
+	}
+
+	if _, err := exec.LookPath("node"); err == nil {
+		args = append(args, "--js-runtimes", "node")
+	} else if _, err := exec.LookPath("deno"); err == nil {
+		args = append(args, "--js-runtimes", "deno")
 	}
 
 	if cookiesFile != "" {
@@ -290,10 +357,22 @@ func Download(ctx context.Context, id string, outputPath string, progressChan ch
 		"--audio-format", "mp3",
 		"--audio-quality", "0",
 		"--no-keep-video",
+		"-f", "bestaudio/best",
 		"--newline",
-		"--js-runtimes", "node",
+		"--extractor-args", "youtube:player_client=visionos,web_creator,web,android,ios",
 		"--remote-components", "ejs:github",
 		"-o", outputTemplate,
+	}
+
+	if _, err := exec.LookPath("node"); err == nil {
+		args = append(args, "--js-runtimes", "node")
+	} else if _, err := exec.LookPath("deno"); err == nil {
+		args = append(args, "--js-runtimes", "deno")
+	}
+
+	ffmpegPath, ffmpegErr := ResolveFFmpegPath()
+	if ffmpegErr == nil {
+		args = append(args, "--ffmpeg-location", ffmpegPath)
 	}
 
 	if cookiesFile != "" {
@@ -343,18 +422,53 @@ func Download(ctx context.Context, id string, outputPath string, progressChan ch
 		}
 	}
 
-	if err := cmd.Wait(); err != nil {
-		errDetail := strings.TrimSpace(stderrBuf.String())
-		if errDetail != "" {
-			// Extract the last ERROR line if present for a cleaner message
-			for _, line := range strings.Split(errDetail, "\n") {
-				if strings.Contains(line, "ERROR") {
-					errDetail = strings.TrimSpace(line)
+	ytErr := cmd.Wait()
+
+	// Helper function to attempt fallback audio conversion if yt-dlp downloaded an audio/video file but didn't convert to mp3
+	if _, err := os.Stat(outputPath); err != nil {
+		if ffmpegErr == nil {
+			baseName := outputPath
+			if ext != "" {
+				baseName = outputPath[:len(outputPath)-len(ext)]
+			}
+			basePrefix := filepath.Base(baseName)
+
+			if entries, readErr := os.ReadDir(destDir); readErr == nil {
+				for _, entry := range entries {
+					if entry.IsDir() {
+						continue
+					}
+					name := entry.Name()
+					if strings.HasPrefix(name, basePrefix) && name != filepath.Base(outputPath) {
+						sourceFile := filepath.Join(destDir, name)
+						cmdConvert := exec.CommandContext(ctx, ffmpegPath, "-y", "-i", sourceFile, "-vn", "-c:a", "libmp3lame", "-q:a", "0", outputPath)
+						if errConv := cmdConvert.Run(); errConv == nil {
+							if info, errStat := os.Stat(outputPath); errStat == nil && info.Size() > 0 {
+								_ = os.Remove(sourceFile)
+								break
+							}
+						}
+					}
 				}
 			}
-			return "", fmt.Errorf("%s", errDetail)
 		}
-		return "", fmt.Errorf("failed to download: %w", err)
+	}
+
+	if ytErr != nil {
+		// Only report error if the final file doesn't exist
+		if _, err := os.Stat(outputPath); err != nil {
+			errDetail := strings.TrimSpace(stderrBuf.String())
+			if errDetail != "" {
+				// Extract the last ERROR line if present for a cleaner message
+				for _, line := range strings.Split(errDetail, "\n") {
+					if strings.Contains(line, "ERROR") {
+						errDetail = strings.TrimSpace(line)
+					}
+				}
+				return "", fmt.Errorf("%s", errDetail)
+			}
+			return "", fmt.Errorf("failed to download: %w", ytErr)
+		}
 	}
 
 	// Double check if file was created

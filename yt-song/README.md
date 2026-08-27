@@ -49,10 +49,10 @@ The native audio playing engine compiled via CGO needs ALSA headers to connect t
 
 ### 2. Media Downloader (`yt-dlp`)
 The search and download backend relies on `yt-dlp`. 
-* The application will automatically check for a local binary located at `./bin/yt-dlp`.
-* If not present, it will search the global system `$PATH`.
+* The application automatically checks for a binary in `./bin/yt-dlp`, adjacent to the running executable (`bin/yt-dlp` or `yt-dlp`), falling back to system `$PATH`.
+* Uses modern supported player clients (`visionos,web_creator,web,android,ios`) and automatically detects JavaScript runtimes (`node`/`deno`) to solve YouTube bot signature challenges.
 
-To install it globally:
+To install or update `yt-dlp` globally:
 ```bash
 # Via official GitHub Releases (Recommended for latest hotfixes)
 sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
@@ -66,7 +66,9 @@ yt-dlp --version
 ```
 
 ### 3. Media Transcoder (`ffmpeg`)
-`yt-dlp` requires `ffmpeg` to extract and transcode the downloaded YouTube audio stream into an MP3 file:
+`yt-dlp` requires `ffmpeg` to transcode downloaded YouTube audio streams into MP3 format for low-latency playback:
+* Resolves `ffmpeg` automatically in `./bin/`, adjacent to executable, or system `$PATH`.
+* Passes explicit `--ffmpeg-location` to ensure seamless transcoding across all environments.
 * **Debian/Ubuntu**:
   ```bash
   sudo apt-get install -y ffmpeg
@@ -76,10 +78,9 @@ yt-dlp --version
   brew install ffmpeg
   ```
 
-Verify `ffmpeg` mapping:
+Verify `ffmpeg` mapping or run diagnostics:
 ```bash
-which ffmpeg
-ffmpeg -version
+ytmusic --check
 ```
 
 ---

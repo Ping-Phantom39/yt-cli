@@ -86,3 +86,21 @@ func TestScanLocalMusic(t *testing.T) {
 		t.Errorf("ScanLocalMusic failed to detect test audio files. Got: %+v", videos)
 	}
 }
+
+func TestResolvePath(t *testing.T) {
+	path, err := ResolvePath()
+	if err != nil {
+		t.Logf("ResolvePath error (expected if yt-dlp is not installed): %v", err)
+	} else if path == "" {
+		t.Errorf("ResolvePath returned empty string without error")
+	}
+}
+
+func TestResolveFFmpegPath(t *testing.T) {
+	path, err := ResolveFFmpegPath()
+	if err != nil {
+		t.Logf("ResolveFFmpegPath error (expected if ffmpeg is not installed): %v", err)
+	} else if path == "" {
+		t.Errorf("ResolveFFmpegPath returned empty string without error")
+	}
+}

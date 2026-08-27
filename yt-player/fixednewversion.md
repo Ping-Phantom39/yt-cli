@@ -63,32 +63,55 @@ Users can change playback quality live in the interface:
 
 ### 4. Quality-Aware Downloader (`internal/downloader/downloader.go`)
 - Updated `Download()` to download video/audio matching the user's selected quality preset.
-- Utilizes `visionos,android_creator,tv_embedded,android,ios,tv,web` clients for multi-resolution downloads.
+- Utilizes `visionos,web_creator,web,android,ios` clients for multi-resolution downloads.
 
 ---
 
-## 4. Modified Files Summary
+## 4. `yt-song` (Audio Player) Fixes & Improvements
 
-| File | Summary of Changes |
-| :--- | :--- |
-| [`internal/player/player.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/player/player.go) | Configured `QualityPresets`, `QualityOption`, format selectors, and `visionos` options. |
-| [`internal/ui/ui.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/ui/ui.go) | Added interactive quality cycling (`[v]`/`[Tab]`), direct numeric shortcuts (`[1-6]`), and quality badges. |
-| [`cmd/root.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/cmd/root.go) | Added `-q, --quality` flag for user-selectable initial video resolution. |
-| [`internal/downloader/downloader.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/downloader/downloader.go) | Enabled quality-aware downloads and multi-client resolution extraction. |
-| [`internal/player/player_test.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/player/player_test.go) | Added unit tests covering all quality options (Best, 720p, Audio Only). |
-| [`README.md`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/README.md) | Documented quality selector keybindings and CLI flag. |
+### A. Issue: "Requested format is not available"
+When downloading or streaming music in `ytmusic`, YouTube stream extraction failed with `Requested format is not available`.
+
+### B. Root Cause
+- Invoking `yt-dlp` without an explicit `-f "bestaudio/best"` format selector and with invalid player client strings (`android_creator`, `tv_embedded`).
+- Missing `ResolveFFmpegPath` and `--ffmpeg-location` causing audio transcoding failures when running with local `./bin/ffmpeg` or adjacent binaries.
+
+### C. Solutions Implemented
+1. **Format Fallback**: Configured `-f "bestaudio/best"` in `yt-song/internal/downloader/downloader.go` to grab standalone Opus/AAC streams with graceful fallback to standard streams.
+2. **FFmpeg & yt-dlp Path Resolution**: Added cross-platform binary resolution (`.exe` on Windows, adjacent directory checks, and `./bin/` folder discovery) and passed `--ffmpeg-location` explicitly to `yt-dlp`.
+3. **Client Optimization**: Standardized client endpoints to `visionos,web_creator,web,android,ios`.
+4. **Fallback Transcoding**: Added post-download transcoding via FFmpeg in case `yt-dlp` leaves raw container formats.
+5. **Dependency Checker**: Integrated path resolution into `deps.CheckAll()` (`ytmusic --check`).
 
 ---
 
-## 5. Verification Results
+## 5. Modified Files Summary
+
+| Component | File | Summary of Changes |
+| :--- | :--- | :--- |
+| **yt-player** | [`internal/player/player.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/player/player.go) | Configured `QualityPresets`, format selectors, and `visionos` options. |
+| **yt-player** | [`internal/ui/ui.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/ui/ui.go) | Added quality cycling (`[v]`/`[Tab]`), numeric shortcuts (`[1-6]`), and quality badges. |
+| **yt-player** | [`cmd/root.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/cmd/root.go) | Added `-q, --quality` flag for user-selectable initial video resolution. |
+| **yt-player** | [`internal/downloader/downloader.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/downloader/downloader.go) | Enabled quality-aware downloads and multi-client resolution extraction. |
+| **yt-player** | [`internal/player/player_test.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-player/internal/player/player_test.go) | Added unit tests covering all quality options (Best, 720p, Audio Only). |
+| **yt-song** | [`internal/downloader/downloader.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-song/internal/downloader/downloader.go) | Fixed audio format extraction (`-f bestaudio/best`), added `ResolveFFmpegPath`, and `--ffmpeg-location`. |
+| **yt-song** | [`internal/deps/deps.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-song/internal/deps/deps.go) | Updated dependency checker to reuse resolved paths for `yt-dlp` and `ffmpeg`. |
+| **yt-song** | [`internal/downloader/downloader_test.go`](file:///home/kamal/Documents/YT_SONGS/yt-cli/yt-song/internal/downloader/downloader_test.go) | Added unit tests for `ResolvePath` and `ResolveFFmpegPath`. |
+| **Root** | [`README.md`](file:///home/kamal/Documents/YT_SONGS/yt-cli/README.md) | Updated feature list, flags, keybindings, and documentation. |
+
+---
+
+## 6. Verification Results
 
 1. **Unit Tests**:
    ```bash
-   go test ./...
-   # ok ytplayer/internal/downloader
-   # ok ytplayer/internal/player
+   cd yt-player && go test ./...   # PASS
+   cd ../yt-song && go test ./...  # PASS
    ```
-2. **Stream Resolution Verification**:
+2. **Stream Resolution Verification (`ytplayer`)**:
    - `4K / Best`: Verified streaming in **3840x2160 AV1 / 1920x1080 VP9** + **Opus 48kHz** (Exit Code 0).
    - `720p HD`: Verified streaming in **1280x720 AV1/VP9** (Exit Code 0).
    - `Audio Only`: Verified streaming with `--no-video` (Exit Code 0).
+3. **Audio Playback Verification (`ytmusic`)**:
+   - Audio extraction & playback tested with high-fidelity Opus/AAC transcode to MP3 via ALSA (Exit Code 0).
+   - `ytmusic --check` all green `[🟢 OK]`.

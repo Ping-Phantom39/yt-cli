@@ -224,14 +224,19 @@ Or search directly from startup:
 
 #### **Options and Flags**
 * `-l, --limit int`: Maximum search results to query (default: `15`).
+* `-q, --quality string`: Max playback/download quality (e.g. `best`, `1080`, `720`, `480`, `360`, `audio`) (default: `best`).
+* `-m, --local`: Start directly in Local Offline Video mode.
 * `--cookies string`: Custom file path containing exported session cookies.
 * `--cookies-from-browser string`: Extract session cookies directly from a specific browser (e.g. `chrome`, `firefox`, `safari`, `brave`, `edge`).
 * `--vo string`: Override the `mpv` video output driver (e.g., `tct`, `sixel`, `kitty`, `gpu`). Useful for streaming inside headless/SSH sessions.
 * `--check`: Quick check of local media tools and dependency status.
 
 #### **TUI Keyboard Shortcuts**
-* `[/]` &mdash; Focus the search bar to enter queries.
-* `[Enter]` &mdash; Stream the highlighted video using `mpv` (or play from local cache if downloaded).
+* `[/]` &mdash; Focus the search bar to enter queries or filter local files.
+* `[m]` &mdash; Toggle between **Online YouTube Mode** and **Local Offline Video Mode**.
+* `[v]` or `[Tab]` &mdash; Cycle through video quality presets (**Best/4K** ➔ **1080p** ➔ **720p** ➔ **480p** ➔ **360p** ➔ **Audio Only 🎵**).
+* `[1] - [6]` &mdash; Quick jump to quality preset (`1: 4K/Best`, `2: 1080p`, `3: 720p`, `4: 480p`, `5: 360p`, `6: Audio Only`).
+* `[Enter]` &mdash; Stream the highlighted video using `mpv` with the selected quality preset.
 * `[d]` &mdash; Background download the video as high-quality `.mp4` into `downloads/`.
 * `[Esc]` &mdash; Unfocus search bar and return to result browsing.
 * `[q]` or `[Ctrl+C]` &mdash; Quit the application.
@@ -251,13 +256,17 @@ Or start with a search query:
 
 #### **Options and Flags**
 * `-l, --limit int`: Maximum search results to query (default: `15`).
+* `-m, --local`: Start directly in Local Offline Music mode.
+* `-v, --volume float`: Starting volume level (0.0 to 1.0) (default: `0.8`).
 * `--cookies string`: Custom Netscape format cookies file path.
 * `--cookies-from-browser string`: Load cookies from a browser profile to avoid bot bans.
-* `--check`: Verify local configuration and audio device capability.
+* `--check`: Verify local configuration, FFmpeg, yt-dlp, and audio device capability.
 
 #### **TUI Keyboard Shortcuts**
-* `[/]` &mdash; Focus the search bar.
-* `[Enter]` (on result) &mdash; Download and start streaming audio via system speaker.
+* `[/]` &mdash; Focus the search bar to search online tracks or filter local library.
+* `[m]` &mdash; Toggle between **Online YouTube Mode** and **Local Offline Music Mode**.
+* `[Enter]` (on result) &mdash; Download/buffer and stream audio directly via system speaker.
+* `[d]` &mdash; Download song permanently to `./downloads/<Song_Title>.mp3`.
 * `[Space]` &mdash; Pause/Resume playback.
 * `[s]` &mdash; Stop playback.
 * `[Left]` / `[Right]` or `[h]` / `[l]` &mdash; Seek backward/forward by 5 seconds.
