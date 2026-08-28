@@ -38,8 +38,7 @@ Clone or navigate to the directory and run:
 go build -o ytplayer main.go
 
 Alternatively you can download through go installer as:
-module github.com/Ping-Phantom39/yt-cli/yt-player
-module github.com/Ping-Phantom39/yt-cli/yt-song
+go install github.com/Ping-Phantom39/yt-cli/yt-player@latest
 ```
 
 ---
