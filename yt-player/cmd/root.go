@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"ytplayer/internal/deps"
-	"ytplayer/internal/ui"
+	"github.com/Ping-Phantom39/yt-cli/yt-player/internal/deps"
+	"github.com/Ping-Phantom39/yt-cli/yt-player/internal/ui"
 )
 
 var (

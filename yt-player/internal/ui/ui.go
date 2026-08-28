@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"ytplayer/internal/downloader"
-	"ytplayer/internal/player"
+	"github.com/Ping-Phantom39/yt-cli/yt-player/internal/downloader"
+	"github.com/Ping-Phantom39/yt-cli/yt-player/internal/player"
 )
 
 // Message types for Bubble Tea event loop

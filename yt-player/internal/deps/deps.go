@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-	"ytplayer/internal/downloader"
+	"github.com/Ping-Phantom39/yt-cli/yt-player/internal/downloader"
 )
 
 // Dependency represents a system or binary dependency

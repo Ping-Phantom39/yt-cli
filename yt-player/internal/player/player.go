@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"ytplayer/internal/downloader"
+	"github.com/Ping-Phantom39/yt-cli/yt-player/internal/downloader"
 )
 
 // QualityOption represents a selectable playback resolution preset.
