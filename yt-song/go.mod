@@ -1,6 +1,6 @@
 module ytmusic
 
-go 1.25.0
+module github.com/Ping-Phantom39/yt-cli/yt-song
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0

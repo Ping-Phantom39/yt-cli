@@ -1,4 +1,4 @@
-module ytplayer
+module github.com/Ping-Phantom39/yt-cli/yt-player
 
 go 1.25.0
 
