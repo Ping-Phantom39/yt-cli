@@ -1,6 +1,6 @@
 package main
 
-import "ytplayer/cmd"
+import "github.com/Ping-Phantom39/yt-cli/yt-player/cmd"
 
 func main() {
 	cmd.Execute()
